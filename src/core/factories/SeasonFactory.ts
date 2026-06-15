@@ -1,7 +1,8 @@
-import type { SeasonState, RiderStats, Track } from '../types';
+import type { SeasonState, PilotArchetype, Brand, Track } from '../types';
 import { SEASON_RACE_COUNT } from '../constants';
 import { TRACK_BANK } from '../../data/tracks';
 import { createPlayerRider, generateAIRiders } from './RiderFactory';
+import { resetProgression } from '../Progression';
 import type { RNG } from '../RNG';
 
 function shuffle<T>(arr: readonly T[], rng: RNG): T[] {
@@ -13,27 +14,10 @@ function shuffle<T>(arr: readonly T[], rng: RNG): T[] {
   return a;
 }
 
-function buildCalendar(rng: RNG): Track[] {
-  // Guarantee one <0.3 and one >0.7, then fill the rest, then shuffle.
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const picked = shuffle(TRACK_BANK, rng).slice(0, SEASON_RACE_COUNT);
-    const hasLow = picked.some((t) => t.technicality < 0.3);
-    const hasHigh = picked.some((t) => t.technicality > 0.7);
-    if (hasLow && hasHigh) return picked;
-  }
-  // Deterministic fallback: force-include one low and one high.
-  const low = TRACK_BANK.find((t) => t.technicality < 0.3)!;
-  const high = TRACK_BANK.find((t) => t.technicality > 0.7)!;
-  const rest = shuffle(TRACK_BANK.filter((t) => t.id !== low.id && t.id !== high.id), rng)
-    .slice(0, SEASON_RACE_COUNT - 2);
-  return shuffle([low, high, ...rest], rng);
-}
-
-export function createSeason(
-  playerName: string, teamName: string, playerStats: RiderStats, rng: RNG,
-): SeasonState {
-  const playerRider = createPlayerRider(playerName, teamName, playerStats);
-  const aiRiders = generateAIRiders(rng, [playerName]);
-  const calendar = buildCalendar(rng);
+export function createSeason(team: string, pilot: PilotArchetype, brand: Brand, rng: RNG): SeasonState {
+  resetProgression();
+  const playerRider = createPlayerRider(team, pilot, brand);
+  const aiRiders = generateAIRiders(pilot.id, brand.id, rng);
+  const calendar: Track[] = shuffle(TRACK_BANK, rng).slice(0, SEASON_RACE_COUNT);
   return { playerRider, aiRiders, calendar, currentRaceIndex: 0, raceResults: [], isSeasonComplete: false };
 }
