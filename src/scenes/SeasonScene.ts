@@ -6,10 +6,13 @@ import { applyRaceResult, getStandings } from '../core/Championship';
 import { RNG } from '../core/RNG';
 import type { SeasonState, RidingStyle } from '../core/types';
 
+const STYLES: RidingStyle[] = ['safe', 'balanced', 'aggressive'];
+
 export class SeasonScene extends Phaser.Scene {
   private season!: SeasonState;
   private style: RidingStyle = 'balanced';
-  private styleTexts: Record<RidingStyle, Phaser.GameObjects.Text> = {} as never;
+  private styleBoxes: Record<RidingStyle, Phaser.GameObjects.Rectangle> = {} as never;
+  private styleLabels: Record<RidingStyle, Phaser.GameObjects.Text> = {} as never;
 
   constructor() { super('SeasonScene'); }
 
@@ -33,14 +36,20 @@ export class SeasonScene extends Phaser.Scene {
     const s = this.season.playerRider.stats;
     this.add.text(360, 170, `Pace ${s.pace}  Cornering ${s.cornering}  Consistency ${s.consistency}`, { fontSize: '16px', color: '#e0e0e0' });
 
-    // Style selector
+    // Style selector — boxed buttons with full-area click targets.
     this.add.text(360, 230, 'Riding style:', { fontSize: '18px', color: '#e0e0e0' });
-    let y = 270;
-    (['safe', 'balanced', 'aggressive'] as RidingStyle[]).forEach((st) => {
-      const t = this.add.text(380, y, st, { fontSize: '18px', color: '#e0e0e0' }).setInteractive();
-      t.on('pointerdown', () => { this.style = st; this.refreshStyle(); });
-      this.styleTexts[st] = t;
-      y += 36;
+    let y = 280;
+    STYLES.forEach((st) => {
+      const box = this.add.rectangle(470, y, 220, 36, 0x16213e)
+        .setStrokeStyle(2, 0x0f3460)
+        .setInteractive({ useHandCursor: true });
+      const label = this.add.text(470, y, st, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0.5);
+      box.on('pointerover', () => { if (st !== this.style) box.setStrokeStyle(2, 0xe94560); });
+      box.on('pointerout', () => this.refreshStyle());
+      box.on('pointerdown', () => { this.style = st; this.refreshStyle(); });
+      this.styleBoxes[st] = box;
+      this.styleLabels[st] = label;
+      y += 46;
     });
     this.refreshStyle();
 
@@ -49,12 +58,15 @@ export class SeasonScene extends Phaser.Scene {
     renderStandings(this, 720, 90, getStandings(this.season));
 
     // Simulate
-    new Button(this, { x: 460, y: 680, width: 280, height: 56, label: 'SIMULATE RACE', onClick: () => this.simulate() });
+    new Button(this, { x: 470, y: 680, width: 280, height: 56, label: 'SIMULATE RACE', onClick: () => this.simulate() });
   }
 
   private refreshStyle(): void {
-    (['safe', 'balanced', 'aggressive'] as RidingStyle[]).forEach((st) => {
-      this.styleTexts[st].setColor(st === this.style ? '#f5c518' : '#e0e0e0');
+    STYLES.forEach((st) => {
+      const selected = st === this.style;
+      this.styleBoxes[st].setFillStyle(selected ? 0x0f3460 : 0x16213e);
+      this.styleBoxes[st].setStrokeStyle(2, selected ? 0xf5c518 : 0x0f3460);
+      this.styleLabels[st].setColor(selected ? '#f5c518' : '#e0e0e0');
     });
   }
 
