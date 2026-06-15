@@ -1,37 +1,39 @@
-import type { RidingStyle } from './types';
+import type { Setup, Risk } from './types';
 
 export const SEASON_RACE_COUNT = 6;
 export const GRID_SIZE = 10;
 export const AI_RIDER_COUNT = 9;
 
 export const POINTS_TABLE: readonly number[] = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-
-export const PLAYER_STAT_BUDGET = 18;
 export const STAT_MIN = 1;
 export const STAT_MAX = 10;
-export const AI_STAT_MIN = 2;
-export const AI_STAT_MAX = 7;
-export const AI_SUM_MIN = 11;
-export const AI_SUM_MAX = 17;
 
-export const CORNERING_MULTIPLIER = 3.0;
-export const NOISE_STD_DEV = 1.5;
+// Simulation
+export const STAT_SCALE = 1.0;
+export const NOISE_STD_DEV = 1.2;
+export const SETUP_BONUS = 1.5;
+export const SETUP_PENALTY = 0.75;
 
-export const STYLE_PACE_MODIFIER: Record<RidingStyle, number> = {
-  safe: -2,
-  balanced: 0,
-  aggressive: 2,
-};
+export const PUSH_BONUS: Record<Risk, number> = { low: -1.0, medium: 0.0, high: 1.5 };
+export const BASE_CRASH: Record<Risk, number> = { low: 0.03, medium: 0.10, high: 0.22 };
+export const CONSISTENCY_DIVISOR = 15;
+export const CONSISTENCY_FLOOR = 0.35;
+export const CRASH_TECH_FACTOR = 1.0;
+export const CRASH_PENALTY_BASE = 4.0;
+export const CRASH_PENALTY_RANGE = 6.0;
 
-export const BASE_MISTAKE_PROB: Record<RidingStyle, number> = {
-  safe: 0.02,
-  balanced: 0.10,
-  aggressive: 0.25,
-};
+export const SETUPS: readonly Setup[] = ['topSpeed', 'handling', 'acceleration'];
+export const RISKS: readonly Risk[] = ['low', 'medium', 'high'];
 
-export const CONSISTENCY_DIVISOR = 15.0;
-export const CONSISTENCY_FLOOR = 0.01;
-export const MISTAKE_PENALTY_BASE = 4.0;
-export const MISTAKE_PENALTY_RANGE = 6.0;
+// Progression
+export const PILOT_XP_BASE = 10;
+export const PILOT_XP_PODIUM = 5;
+export const PILOT_XP_WIN = 5;
+export const PILOT_XP_PER_LEVEL = 25;
+export const RND_BASE = 2;
+export const RND_PODIUM = 1;
+export const RND_WIN = 1;
 
-export const TARGET_CHAMPION_RATE: readonly [number, number] = [0.30, 0.45];
+// Balance targets
+export const TARGET_BUILD_RATE: readonly [number, number] = [0.25, 0.45];
+export const MAX_BUILD_RATE_SPREAD = 0.15;
