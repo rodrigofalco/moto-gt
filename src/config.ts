@@ -11,6 +11,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#1a1a2e',
   parent: 'game-container',
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  dom: { createContainer: true },
   scene: [BootScene, MainMenuScene, SeasonScene, RaceResultScene],
 };

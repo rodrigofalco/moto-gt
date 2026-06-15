@@ -6,10 +6,14 @@ import { RNG } from '../core/RNG';
 import { PLAYER_STAT_BUDGET, STAT_MIN, STAT_MAX } from '../core/constants';
 import type { RiderStats } from '../core/types';
 
+type FieldKey = 'rider' | 'team';
+const MAX_NAME_LENGTH = 20;
+
 export class MainMenuScene extends Phaser.Scene {
   private stats: RiderStats = { pace: 6, cornering: 6, consistency: 6 };
-  private riderName = 'Player';
-  private teamName = 'My Team';
+  private values: Record<FieldKey, string> = { rider: 'Player', team: 'My Team' };
+  private fieldTexts: Record<FieldKey, Phaser.GameObjects.Text> = {} as never;
+  private activeField: FieldKey = 'rider';
   private remainingText!: Phaser.GameObjects.Text;
   private statTexts: Record<keyof RiderStats, Phaser.GameObjects.Text> = {} as never;
   private startButton!: Button;
@@ -19,9 +23,10 @@ export class MainMenuScene extends Phaser.Scene {
   create(): void {
     this.add.text(512, 80, 'MotoGT', { fontSize: '72px', color: '#f5c518' }).setOrigin(0.5);
     this.add.text(512, 140, 'Motorcycle Racing Manager', { fontSize: '22px', color: '#e0e0e0' }).setOrigin(0.5);
+    this.add.text(512, 178, 'Click a field and type. Tab switches fields.', { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5);
 
-    this.createTextInput(512, 210, 'Rider', this.riderName, (v) => { this.riderName = v; this.refresh(); });
-    this.createTextInput(512, 270, 'Team', this.teamName, (v) => { this.teamName = v; this.refresh(); });
+    this.createField(512, 215, 'rider', 'Rider');
+    this.createField(512, 270, 'team', 'Team');
 
     this.add.text(512, 330, 'Distribute 18 points', { fontSize: '20px', color: '#e0e0e0' }).setOrigin(0.5);
     let y = 380;
@@ -35,23 +40,55 @@ export class MainMenuScene extends Phaser.Scene {
       x: 512, y: 640, width: 320, height: 56, label: 'START SEASON',
       onClick: () => this.start(),
     });
+
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.onKey(event));
+
+    this.refresh();
+    this.renderFields();
+  }
+
+  private createField(x: number, y: number, key: FieldKey, label: string): void {
+    this.add.text(x - 220, y, `${label}:`, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
+    // Clickable input box.
+    const box = this.add.rectangle(x + 40, y, 240, 34, 0x0f3460).setStrokeStyle(2, 0x16213e);
+    box.setInteractive({ useHandCursor: true });
+    box.on('pointerdown', () => { this.activeField = key; this.renderFields(); });
+    this.fieldTexts[key] = this.add.text(x - 70, y, '', { fontSize: '16px', color: '#ffffff' }).setOrigin(0, 0.5);
+  }
+
+  private onKey(event: KeyboardEvent): void {
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      this.activeField = this.activeField === 'rider' ? 'team' : 'rider';
+      this.renderFields();
+      return;
+    }
+    if (event.key === 'Backspace') {
+      this.values[this.activeField] = this.values[this.activeField].slice(0, -1);
+    } else if (event.key.length === 1 && /[A-Za-z0-9 \-_']/.test(event.key)) {
+      if (this.values[this.activeField].length < MAX_NAME_LENGTH) {
+        this.values[this.activeField] += event.key;
+      }
+    } else {
+      return;
+    }
+    this.renderFields();
     this.refresh();
   }
 
-  private createTextInput(x: number, y: number, label: string, initial: string, onChange: (v: string) => void): void {
-    this.add.text(x - 220, y, `${label}:`, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    const el = this.add.dom(x + 40, y, 'input', 'width:220px;height:28px;font-size:16px;') as Phaser.GameObjects.DOMElement;
-    const input = el.node as HTMLInputElement;
-    input.value = initial;
-    input.maxLength = 20;
-    input.addEventListener('input', () => onChange(input.value.trim()));
+  private renderFields(): void {
+    (['rider', 'team'] as FieldKey[]).forEach((key) => {
+      const caret = key === this.activeField ? '|' : '';
+      this.fieldTexts[key].setText(this.values[key] + caret);
+      this.fieldTexts[key].setColor(key === this.activeField ? '#f5c518' : '#ffffff');
+    });
   }
 
   private createStepper(key: keyof RiderStats, y: number): void {
     this.add.text(280, y, key, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    const minus = this.add.text(520, y, '[-]', { fontSize: '22px', color: '#e94560' }).setOrigin(0.5).setInteractive();
+    const minus = this.add.text(520, y, '[-]', { fontSize: '22px', color: '#e94560' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     this.statTexts[key] = this.add.text(580, y, '', { fontSize: '22px', color: '#ffffff' }).setOrigin(0.5);
-    const plus = this.add.text(640, y, '[+]', { fontSize: '22px', color: '#00c853' }).setOrigin(0.5).setInteractive();
+    const plus = this.add.text(640, y, '[+]', { fontSize: '22px', color: '#00c853' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     minus.on('pointerdown', () => this.adjust(key, -1));
     plus.on('pointerdown', () => this.adjust(key, +1));
   }
@@ -71,12 +108,16 @@ export class MainMenuScene extends Phaser.Scene {
       this.statTexts[k]?.setText(String(this.stats[k]));
     });
     this.remainingText.setText(`Points remaining: ${PLAYER_STAT_BUDGET - total}`);
-    const valid = validatePointBuy(this.stats) && this.riderName.length > 0 && this.teamName.length > 0;
+    const valid = validatePointBuy(this.stats)
+      && this.values.rider.trim().length > 0
+      && this.values.team.trim().length > 0;
     this.startButton.setEnabled(valid);
   }
 
   private start(): void {
-    const season = createSeason(this.riderName, this.teamName, this.stats, new RNG(Date.now() >>> 0));
+    const season = createSeason(
+      this.values.rider.trim(), this.values.team.trim(), this.stats, new RNG(Date.now() >>> 0),
+    );
     this.scene.start('SeasonScene', { season });
   }
 }
