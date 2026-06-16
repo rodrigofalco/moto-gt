@@ -100,8 +100,21 @@ export class RaceScene extends Phaser.Scene {
     });
     this.refreshSpeed();
 
+    this.drawLegend();
     new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
     this.renderFrame(0);
+  }
+
+  private drawLegend(): void {
+    this.add.text(700, 348, 'Orders:  Attack = push (risky) · Defend = hold · Settle = safe', { fontSize: '12px', color: '#94a3b8', wordWrap: { width: 312 } });
+    this.add.text(700, 388, 'Bikes:', { fontSize: '12px', color: '#94a3b8' });
+    const legend: [string, number][] = [['Velocita', 0xe94560], ['Apex', 0x4fc3f7], ['Titan', 0xcfd8dc], ['Vortex', 0xff9800]];
+    legend.forEach(([name, color], i) => {
+      const lx = 758 + (i % 2) * 130, ly = 390 + Math.floor(i / 2) * 22;
+      this.add.circle(lx, ly, 5, color);
+      this.add.text(lx + 12, ly, name, { fontSize: '12px', color: '#e0e0e0' }).setOrigin(0, 0.5);
+    });
+    this.add.text(700, 440, "Gold ring = you  ·  cyan ring = the rider you're chasing", { fontSize: '12px', color: '#94a3b8', wordWrap: { width: 312 } });
   }
 
   private refreshOrder(): void {
