@@ -1,123 +1,92 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 import { createSeason } from '../core/factories/SeasonFactory';
-import { validatePointBuy } from '../core/factories/RiderFactory';
 import { RNG } from '../core/RNG';
-import { PLAYER_STAT_BUDGET, STAT_MIN, STAT_MAX } from '../core/constants';
-import type { RiderStats } from '../core/types';
-
-type FieldKey = 'rider' | 'team';
-const MAX_NAME_LENGTH = 20;
+import { PILOT_ROSTER } from '../data/pilots';
+import { BRAND_ROSTER } from '../data/brands';
+import type { PilotArchetype, Brand } from '../core/types';
 
 export class MainMenuScene extends Phaser.Scene {
-  private stats: RiderStats = { pace: 6, cornering: 6, consistency: 6 };
-  private values: Record<FieldKey, string> = { rider: 'Player', team: 'My Team' };
-  private fieldTexts: Record<FieldKey, Phaser.GameObjects.Text> = {} as never;
-  private activeField: FieldKey = 'rider';
-  private remainingText!: Phaser.GameObjects.Text;
-  private statTexts: Record<keyof RiderStats, Phaser.GameObjects.Text> = {} as never;
+  private team = 'My Team';
+  private teamText!: Phaser.GameObjects.Text;
+  private editingTeam = false;
+  private pilot: PilotArchetype | null = null;
+  private brand: Brand | null = null;
+  private pilotCards: Card[] = [];
+  private brandCards: Card[] = [];
   private startButton!: Button;
 
   constructor() { super('MainMenuScene'); }
 
   create(): void {
-    this.add.text(512, 80, 'MotoGT', { fontSize: '72px', color: '#f5c518' }).setOrigin(0.5);
-    this.add.text(512, 140, 'Motorcycle Racing Manager', { fontSize: '22px', color: '#e0e0e0' }).setOrigin(0.5);
-    this.add.text(512, 178, 'Click a field and type. Tab switches fields.', { fontSize: '14px', color: '#94a3b8' }).setOrigin(0.5);
+    this.add.text(512, 36, 'MotoGT', { fontSize: '52px', color: '#f5c518' }).setOrigin(0.5);
 
-    this.createField(512, 215, 'rider', 'Rider');
-    this.createField(512, 270, 'team', 'Team');
-
-    this.add.text(512, 330, 'Distribute 18 points', { fontSize: '20px', color: '#e0e0e0' }).setOrigin(0.5);
-    let y = 380;
-    (['pace', 'cornering', 'consistency'] as (keyof RiderStats)[]).forEach((key) => {
-      this.createStepper(key, y);
-      y += 60;
-    });
-
-    this.remainingText = this.add.text(512, 560, '', { fontSize: '20px', color: '#f5c518' }).setOrigin(0.5);
-    this.startButton = new Button(this, {
-      x: 512, y: 640, width: 320, height: 56, label: 'START SEASON',
-      onClick: () => this.start(),
-    });
-
-    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.onKey(event));
-
-    this.refresh();
-    this.renderFields();
-  }
-
-  private createField(x: number, y: number, key: FieldKey, label: string): void {
-    this.add.text(x - 220, y, `${label}:`, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    // Clickable input box.
-    const box = this.add.rectangle(x + 40, y, 240, 34, 0x0f3460).setStrokeStyle(2, 0x16213e);
+    // Team name (native keyboard input).
+    this.add.text(330, 92, 'Team:', { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
+    const box = this.add.rectangle(560, 92, 240, 32, 0x0f3460).setStrokeStyle(2, 0x16213e);
     box.setInteractive({ useHandCursor: true });
-    box.on('pointerdown', () => { this.activeField = key; this.renderFields(); });
-    this.fieldTexts[key] = this.add.text(x - 70, y, '', { fontSize: '16px', color: '#ffffff' }).setOrigin(0, 0.5);
-  }
+    box.on('pointerdown', () => { this.editingTeam = true; this.renderTeam(); });
+    this.teamText = this.add.text(450, 92, this.team, { fontSize: '16px', color: '#ffffff' }).setOrigin(0, 0.5);
+    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => this.onKey(e));
 
-  private onKey(event: KeyboardEvent): void {
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      this.activeField = this.activeField === 'rider' ? 'team' : 'rider';
-      this.renderFields();
-      return;
-    }
-    if (event.key === 'Backspace') {
-      this.values[this.activeField] = this.values[this.activeField].slice(0, -1);
-    } else if (event.key.length === 1 && /[A-Za-z0-9 \-_']/.test(event.key)) {
-      if (this.values[this.activeField].length < MAX_NAME_LENGTH) {
-        this.values[this.activeField] += event.key;
-      }
-    } else {
-      return;
-    }
-    this.renderFields();
-    this.refresh();
-  }
-
-  private renderFields(): void {
-    (['rider', 'team'] as FieldKey[]).forEach((key) => {
-      const caret = key === this.activeField ? '|' : '';
-      this.fieldTexts[key].setText(this.values[key] + caret);
-      this.fieldTexts[key].setColor(key === this.activeField ? '#f5c518' : '#ffffff');
+    this.add.text(80, 132, 'Choose your pilot', { fontSize: '18px', color: '#e0e0e0' });
+    PILOT_ROSTER.forEach((p, i) => {
+      const card = new Card(this, {
+        x: 160 + (i % 3) * 235, y: 225 + Math.floor(i / 3) * 150, width: 220, height: 130,
+        title: p.name, subtitle: p.nickname,
+        stats: [
+          { label: 'Pace', value: p.skills.pace },
+          { label: 'Cornering', value: p.skills.cornering },
+          { label: 'Consistency', value: p.skills.consistency },
+        ],
+        onClick: () => { this.pilot = p; this.pilotCards.forEach((c, j) => c.setSelected(j === i)); this.refresh(); },
+      });
+      this.pilotCards.push(card);
     });
-  }
 
-  private createStepper(key: keyof RiderStats, y: number): void {
-    this.add.text(280, y, key, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0, 0.5);
-    const minus = this.add.text(520, y, '[-]', { fontSize: '22px', color: '#e94560' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    this.statTexts[key] = this.add.text(580, y, '', { fontSize: '22px', color: '#ffffff' }).setOrigin(0.5);
-    const plus = this.add.text(640, y, '[+]', { fontSize: '22px', color: '#00c853' }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    minus.on('pointerdown', () => this.adjust(key, -1));
-    plus.on('pointerdown', () => this.adjust(key, +1));
-  }
+    this.add.text(80, 530, 'Choose your bike', { fontSize: '18px', color: '#e0e0e0' });
+    BRAND_ROSTER.forEach((b, i) => {
+      const card = new Card(this, {
+        x: 160 + i * 235, y: 625, width: 220, height: 120,
+        title: b.name,
+        stats: [
+          { label: 'Speed', value: b.params.speed },
+          { label: 'Handling', value: b.params.handling },
+          { label: 'Acceleration', value: b.params.acceleration },
+        ],
+        onClick: () => { this.brand = b; this.brandCards.forEach((c, j) => c.setSelected(j === i)); this.refresh(); },
+      });
+      this.brandCards.push(card);
+    });
 
-  private adjust(key: keyof RiderStats, delta: number): void {
-    const next = this.stats[key] + delta;
-    const total = this.stats.pace + this.stats.cornering + this.stats.consistency;
-    if (next < STAT_MIN || next > STAT_MAX) return;
-    if (delta > 0 && total >= PLAYER_STAT_BUDGET) return;
-    this.stats[key] = next;
+    this.startButton = new Button(this, { x: 512, y: 725, width: 280, height: 54, label: 'START SEASON', onClick: () => this.start() });
     this.refresh();
+    this.renderTeam();
+  }
+
+  private onKey(e: KeyboardEvent): void {
+    if (!this.editingTeam) return;
+    if (e.key === 'Backspace') this.team = this.team.slice(0, -1);
+    else if (e.key === 'Enter') this.editingTeam = false;
+    else if (e.key.length === 1 && /[A-Za-z0-9 \-_']/.test(e.key) && this.team.length < 20) this.team += e.key;
+    else return;
+    this.renderTeam();
+    this.refresh();
+  }
+
+  private renderTeam(): void {
+    this.teamText.setText(this.team + (this.editingTeam ? '|' : ''));
+    this.teamText.setColor(this.editingTeam ? '#f5c518' : '#ffffff');
   }
 
   private refresh(): void {
-    const total = this.stats.pace + this.stats.cornering + this.stats.consistency;
-    (['pace', 'cornering', 'consistency'] as (keyof RiderStats)[]).forEach((k) => {
-      this.statTexts[k]?.setText(String(this.stats[k]));
-    });
-    this.remainingText.setText(`Points remaining: ${PLAYER_STAT_BUDGET - total}`);
-    const valid = validatePointBuy(this.stats)
-      && this.values.rider.trim().length > 0
-      && this.values.team.trim().length > 0;
-    this.startButton.setEnabled(valid);
+    this.startButton.setEnabled(this.team.trim().length > 0 && this.pilot !== null && this.brand !== null);
   }
 
   private start(): void {
-    const season = createSeason(
-      this.values.rider.trim(), this.values.team.trim(), this.stats, new RNG(Date.now() >>> 0),
-    );
+    if (!this.pilot || !this.brand) return;
+    const season = createSeason(this.team.trim(), this.pilot, this.brand, new RNG(Date.now() >>> 0));
     this.scene.start('SeasonScene', { season });
   }
 }
