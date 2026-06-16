@@ -19,13 +19,13 @@ describe('CrashModel', () => {
     expect(crashProbability('high', 10, technical)).toBeLessThan(crashProbability('high', 1, technical));
   });
 
-  it('clamps into [0, 0.9] and penalty in [4,10]', () => {
+  it('clamps into [0, 0.9] and penalty in [12,20]', () => {
     expect(crashProbability('high', 1, technical)).toBeLessThanOrEqual(0.9);
     const r = new RNG(1);
     for (let i = 0; i < 500; i++) {
       const p = crashPenalty(r);
-      expect(p).toBeGreaterThanOrEqual(4);
-      expect(p).toBeLessThanOrEqual(10);
+      expect(p).toBeGreaterThanOrEqual(12);
+      expect(p).toBeLessThanOrEqual(20);
     }
   });
 });

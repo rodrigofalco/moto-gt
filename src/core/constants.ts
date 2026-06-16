@@ -10,17 +10,20 @@ export const STAT_MAX = 10;
 
 // Simulation
 export const STAT_SCALE = 1.0;
-export const NOISE_STD_DEV = 1.2;
+export const NOISE_STD_DEV = 1.1;
 export const SETUP_BONUS = 1.5;
 export const SETUP_PENALTY = 0.75;
 
-export const PUSH_BONUS: Record<Risk, number> = { low: -1.0, medium: 0.0, high: 1.5 };
-export const BASE_CRASH: Record<Risk, number> = { low: 0.03, medium: 0.10, high: 0.22 };
+export const PUSH_BONUS: Record<Risk, number> = { low: -1.0, medium: 0.0, high: 1.2 };
+export const BASE_CRASH: Record<Risk, number> = { low: 0.02, medium: 0.06, high: 0.16 };
 export const CONSISTENCY_DIVISOR = 15;
 export const CONSISTENCY_FLOOR = 0.35;
-export const CRASH_TECH_FACTOR = 1.0;
-export const CRASH_PENALTY_BASE = 4.0;
-export const CRASH_PENALTY_RANGE = 6.0;
+export const CRASH_TECH_FACTOR = 7.0;
+export const CRASH_TECH_THRESHOLD = 0.30;
+// A crash must reliably drop the rider to the back (≈ DNF), so the penalty is large
+// relative to the ~5–9 performance spread of the field.
+export const CRASH_PENALTY_BASE = 12.0;
+export const CRASH_PENALTY_RANGE = 8.0;
 
 export const SETUPS: readonly Setup[] = ['topSpeed', 'handling', 'acceleration'];
 export const RISKS: readonly Risk[] = ['low', 'medium', 'high'];
