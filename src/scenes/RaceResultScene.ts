@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
 import { getStandings, getChampion } from '../core/Championship';
+import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
 import type { SeasonState, RaceResult, Rider } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
@@ -23,9 +24,13 @@ export class RaceResultScene extends Phaser.Scene {
     if (this.season.isSeasonComplete) { this.renderSeasonEnd(); return; }
 
     this.add.text(40, 24, `Results — ${this.result.track.name}`, { fontSize: '24px', color: '#f5c518' });
+    const pe = this.result.finishingOrder.find((e) => e.rider.isPlayer)!;
+    const champPos = getStandings(this.season).findIndex((r) => r.isPlayer) + 1;
+    const racesLeft = this.season.calendar.length - this.season.currentRaceIndex;
+    this.add.text(40, 52, resultHeadline(pe.position, pe.crashed, champPos, racesLeft), { fontSize: '18px', color: '#00e5ff' });
     const lines = this.result.finishingOrder.map((e) => {
       const tag = e.rider.isPlayer ? '>' : ' ';
-      const crash = e.crashed ? ' !' : '  ';
+      const crash = e.crashed ? ' DNF' : '    ';
       return `${tag}${String(e.position).padStart(2)}. ${e.rider.name.padEnd(16)} ${SETUP_SHORT[e.setup]}/${RISK_SHORT[e.risk]} ${String(e.pointsAwarded).padStart(3)}${crash}`;
     });
     this.add.text(40, 80, lines.join('\n'), { fontFamily: 'monospace', fontSize: '15px', color: '#e0e0e0' });
@@ -66,9 +71,10 @@ export class RaceResultScene extends Phaser.Scene {
     const champ = getChampion(this.season);
     const pos = standings.findIndex((r) => r.isPlayer) + 1;
     const p = this.season.playerRider;
+    const dnfs = this.season.raceResults.filter((r) => r.finishingOrder.find((e) => e.rider.isPlayer)?.crashed).length;
     this.add.text(512, 44, 'SEASON COMPLETE', { fontSize: '38px', color: '#f5c518' }).setOrigin(0.5);
     this.add.text(512, 90, `Champion: ${champ.name} — ${champ.points} pts`, { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
-    this.add.text(512, 118, `You finished P${pos} — ${p.points} pts | Wins ${p.positionCounts[0]} | Podiums ${p.positionCounts[0] + p.positionCounts[1] + p.positionCounts[2]}`, { fontSize: '15px', color: '#e0e0e0' }).setOrigin(0.5);
+    this.add.text(512, 118, `You finished P${pos} — ${p.points} pts | Wins ${p.positionCounts[0]} | Podiums ${p.positionCounts[0] + p.positionCounts[1] + p.positionCounts[2]} | DNFs ${dnfs}`, { fontSize: '15px', color: '#e0e0e0' }).setOrigin(0.5);
 
     this.drawPodium(standings);
 
