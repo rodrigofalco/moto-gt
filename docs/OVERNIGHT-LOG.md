@@ -27,9 +27,9 @@
 11. [x] **Bundle code-split** — true split unsupported by rolldown-vite; lifted the cosmetic warning instead.
 
 ## Second wave (planned backlog done; bonus value while time remains)
-12. [ ] **Race-day lap-1 grid spacing** — dots line up cleanly at the start (cleaner than current bunch).
-13. [ ] **Hub track-reading hint** — show the track's dominant axis + suggested setup, to help the setup call.
-14. [ ] (only if clearly safe) one more measured balance refinement OR result-screen polish.
+12. [x] **Race-day lap-1 grid spacing** — done (staggered start grid fades to true gaps by ~lap 2).
+13. [x] **Hub track-reading hint** — done (names track character + suggested setup).
+14. [ ] Not done — stopped on diminishing-returns judgment; everything high-value was shipped.
 
 ## Findings & decisions for review
 
@@ -82,3 +82,25 @@ restore ~9–10% crashes while keeping the steeper consistency curve). Left as a
 33–37%). Addresses F1's "accel/Vortex strongest". Formal harness still green. The deeper structural
 cause (accel axis is bike-only / undiluted) remains — proposal **P1** (blend accel with pilot pace)
 is still the model-level fix, left for your decision.
+
+---
+
+## Morning summary ☀️ (loop stopped ~01:05; 19 commits on `v2-overnight`)
+
+Review with: `git checkout v2-overnight && git log v2-raceday..v2-overnight --oneline`. Nothing merged; `main` and `v2-raceday` untouched. Branch is green the whole way (49 tests, clean build, tsc clean).
+
+### Shipped & browser-verified
+- **Polish/UX:** unique AI names (no "Sven Larsson 2"); removed dead `crashPenalty`; result-screen **movement arrows** (▲▼—); **season-end podium** (medal blocks + brand dots); build chunk-warning lifted.
+- **Race-day feel:** **finish line**; **overtake flash** (▲/▼ Pn→Pm); **clean start grid** (fades to true gaps by ~lap 2); on-screen **legend** (orders, bike colors, ring meanings).
+- **Hub:** **track-reading hint** ("Power/Technical/Stop-go track → setup favored").
+- **Balance experiments (kept, measured):** **F2** consistency steepened — consistency stops being a trap stat (pilot spread 20→17.5pt; Hotshot no longer runaway; Metronome off the bottom; formal harness green). **F3** Vortex 6/6/9→6/7/8 — brand spread 12→7pt.
+- **Tooling:** `tests/sweep.test.ts` balance sweep → `/tmp/sweep-report.txt` (bump N locally for sharper numbers).
+
+### Decisions waiting for you
+1. **Merge?** I think `v2-overnight` is worth merging into `v2-raceday` (then onward to `main` when you're ready). Your call — cherry-pick if you prefer.
+2. **Proposal P1 (NOT applied):** the model-level fix for accel being a "pure" bike-only axis — blend `accelerationAxis = (bike.acceleration + pilot.pace)/2`. Changes the agreed design (accel = brand-only), so I left it. Would further flatten brand dominance.
+3. **Crash drama (NOT applied):** F2 dropped the player crash rate to ~6.4%. If you want more on-screen crashes, nudge `BASE_CRASH` up ~1.4× (restores ~9–10% while keeping the steeper consistency curve).
+4. **Deferred:** item 6 (full anti-overlap dot nudge) — partially handled by the start grid + small permanent offset; a full pairwise-separation pass risks jitter, so I left it.
+
+### How it plays now
+Same loop as before, but: pick pilot+bike → hub shows a setup hint → grid → watch a slower (~10s/lap), smoother race with brand-colored numbered dots, live Attack/Defend/Settle, a finish line, overtake flashes, and a "who you're chasing" callout → podium at season end. Consistency and brand choice both matter more than they did at lights-out.
