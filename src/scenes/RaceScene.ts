@@ -33,11 +33,14 @@ export class RaceScene extends Phaser.Scene {
   private orderText!: Phaser.GameObjects.Text;
   private orderBoxes: Phaser.GameObjects.Rectangle[] = [];
   private speedBoxes: Phaser.GameObjects.Rectangle[] = [];
+  private displayProg: Map<string, number> = new Map();   // smoothed progress for on-track motion
+  private chaseRing!: Phaser.GameObjects.Arc;             // marks the rider just ahead of the player
+  private calloutText!: Phaser.GameObjects.Text;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
     this.sd = data; this.gfx = new Map(); this.numbers = new Map();
-    this.prev = new Map(); this.cur = new Map();
+    this.prev = new Map(); this.cur = new Map(); this.displayProg = new Map();
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = [];
   }
@@ -63,10 +66,15 @@ export class RaceScene extends Phaser.Scene {
       this.gfx.set(r.id, { dot, ring, num });
       this.prev.set(r.id, 0);
       this.cur.set(r.id, 0);
+      this.displayProg.set(r.id, 0);
     }
+
+    // Ring that marks whichever rider is directly ahead of the player (your battle).
+    this.chaseRing = this.add.circle(OX, OY, 13).setStrokeStyle(2, 0x00e5ff).setVisible(false);
 
     this.lapText = this.add.text(700, 110, '', { fontSize: '20px', color: '#f5c518' });
     this.orderText = this.add.text(700, 146, '', { fontFamily: 'monospace', fontSize: '14px', color: '#e0e0e0' });
+    this.calloutText = this.add.text(70, 590, '', { fontSize: '16px', color: '#00e5ff' });
 
     // Order radio (live risk).
     this.add.text(70, 612, 'Orders', { fontSize: '16px', color: '#e0e0e0' });
@@ -118,28 +126,58 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private renderFrame(frac: number): void {
-    const standings: { id: string; prog: number }[] = [];
+    const EMA = 0.14; // smooths per-lap pace changes so dots glide instead of lurching
+    const screen = new Map<string, { x: number; y: number }>();
     for (const s of this.sd.run.states) {
       const id = s.rider.id;
-      const p = (this.prev.get(id) ?? 0) + ((this.cur.get(id) ?? 0) - (this.prev.get(id) ?? 0)) * frac;
+      const trueP = (this.prev.get(id) ?? 0) + ((this.cur.get(id) ?? 0) - (this.prev.get(id) ?? 0)) * frac;
+      const last = this.displayProg.get(id) ?? trueP;
+      const disp = last + (trueP - last) * EMA;
+      this.displayProg.set(id, disp);
       // Small grid offset by start number so a tight pack (and the start line) stays legible.
       const offset = ((this.numbers.get(id) ?? 1) - 1) * 0.012;
-      const loops = p / this.progressPerLoop - offset;
+      const loops = disp / this.progressPerLoop - offset;
       const pt = pointAt(this.path, ((loops % 1) + 1) % 1);
       const g = this.gfx.get(id)!;
       const sx = OX + pt.x * W, sy = OY + pt.y * H;
       g.dot.setPosition(sx, sy); g.num.setPosition(sx, sy);
       if (g.ring) g.ring.setPosition(sx, sy);
       if (s.crashed) g.dot.setFillStyle(0xff1744);
-      standings.push({ id, prog: s.progress });
+      screen.set(id, { x: sx, y: sy });
     }
-    standings.sort((a, b) => b.prog - a.prog);
+
+    const order = this.sd.run.states.slice().sort((a, b) => {
+      if (a.crashed !== b.crashed) return a.crashed ? 1 : -1;
+      return b.progress - a.progress;
+    });
+    const secPerLap = RACE_ANIM_SECONDS / RACE_LAPS;
+    const playerIdx = order.findIndex((s) => s.rider.isPlayer);
+
     this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone + 1)} / ${RACE_LAPS}`);
-    this.orderText.setText(standings.map((st, i) => {
-      const r = this.sd.run.states.find((x) => x.rider.id === st.id)!.rider;
-      const tag = r.isPlayer ? '>' : ' ';
-      return `${tag}${String(i + 1).padStart(2)} #${String(this.numbers.get(st.id)).padStart(2)} ${r.name.slice(0, 13)}`;
+    this.orderText.setText(order.map((s, i) => {
+      const r = s.rider;
+      const near = Math.abs(i - playerIdx) === 1;
+      const tag = r.isPlayer ? '>' : near ? '·' : ' ';
+      const gap = i > 0 ? ((order[i - 1].progress - s.progress) / this.progressPerLoop) * secPerLap : 0;
+      const gapStr = s.crashed ? 'OUT' : i === 0 ? 'LEADER' : `+${gap.toFixed(1)}s`;
+      return `${tag}${String(i + 1).padStart(2)} #${String(this.numbers.get(r.id)).padStart(2)} ${r.name.slice(0, 12).padEnd(12)} ${gapStr}`;
     }).join('\n'));
+
+    // Mark and name whoever the player is battling (the rider directly ahead).
+    const me = order[playerIdx];
+    if (me?.crashed) {
+      this.chaseRing.setVisible(false);
+      this.calloutText.setText('You crashed out.');
+    } else if (playerIdx > 0) {
+      const ahead = order[playerIdx - 1];
+      const pos = screen.get(ahead.rider.id)!;
+      this.chaseRing.setPosition(pos.x, pos.y).setVisible(true);
+      const gap = ((ahead.progress - me.progress) / this.progressPerLoop) * secPerLap;
+      this.calloutText.setText(`P${playerIdx + 1} — chasing #${this.numbers.get(ahead.rider.id)} ${ahead.rider.name} (+${gap.toFixed(1)}s)`);
+    } else {
+      this.chaseRing.setVisible(false);
+      this.calloutText.setText('You are leading the race!');
+    }
   }
 
   update(_t: number, delta: number): void {

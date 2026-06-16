@@ -42,13 +42,13 @@ export const TARGET_BUILD_RATE: readonly [number, number] = [0.25, 0.45];
 export const MAX_BUILD_RATE_SPREAD = 0.15;
 
 // Race-day (Phase B)
-export const RACE_LAPS = 14;
+export const RACE_LAPS = 8;
 // basePace accumulates over N laps (×N) while noise grows only ×√N, so to preserve
 // Phase A's signal-to-noise ratio the per-lap noise must be NOISE_STD_DEV·√N, not /√N.
-// Tuned around that value to restore co-equal ~25–45% win rates with the lap engine.
-export const LAP_NOISE_STD = NOISE_STD_DEV * Math.sqrt(RACE_LAPS); // ≈ 3.74
-export const RACE_ANIM_SECONDS = 30;          // base 1× duration; speed control scales it
-export const RACE_SPEEDS: readonly number[] = [0.5, 1, 2];
+// (Co-equal balance is invariant to RACE_LAPS given this; fewer laps also = smoother motion.)
+export const LAP_NOISE_STD = NOISE_STD_DEV * Math.sqrt(RACE_LAPS); // ≈ 2.83
+export const RACE_ANIM_SECONDS = 80;          // 1× ≈ 10s/lap; speed control scales it
+export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
 // Race-day dot colors by bike brand id.
 export const BRAND_COLORS: Record<string, number> = {
