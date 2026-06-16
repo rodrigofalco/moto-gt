@@ -16,8 +16,8 @@ export const SETUP_PENALTY = 0.75;
 
 export const PUSH_BONUS: Record<Risk, number> = { low: -1.0, medium: 0.0, high: 1.2 };
 export const BASE_CRASH: Record<Risk, number> = { low: 0.02, medium: 0.06, high: 0.16 };
-export const CONSISTENCY_DIVISOR = 15;
-export const CONSISTENCY_FLOOR = 0.35;
+export const CONSISTENCY_DIVISOR = 9;
+export const CONSISTENCY_FLOOR = 0.15;
 export const CRASH_TECH_FACTOR = 7.0;
 export const CRASH_TECH_THRESHOLD = 0.30;
 // (crash = DNF via finishing-order in RaceEngine; no score-penalty constant needed)
