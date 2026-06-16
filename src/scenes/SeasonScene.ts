@@ -1,22 +1,19 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
-import { runRace } from '../core/RaceEngine';
-import { applyRaceResult, getStandings } from '../core/Championship';
-import { applyProgression, investBikePoint } from '../core/Progression';
+import { createRace } from '../core/RaceEngine';
+import { getStandings } from '../core/Championship';
+import { investBikePoint } from '../core/Progression';
 import { RNG } from '../core/RNG';
-import { SETUPS, RISKS } from '../core/constants';
-import type { SeasonState, Setup, Risk, BikeParams } from '../core/types';
+import { SETUPS } from '../core/constants';
+import type { SeasonState, Setup, BikeParams } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
-const RISK_LABEL: Record<Risk, string> = { low: 'Low', medium: 'Medium', high: 'High' };
 
 export class SeasonScene extends Phaser.Scene {
   private season!: SeasonState;
   private setup: Setup = 'handling';
-  private risk: Risk = 'medium';
   private setupBoxes: Record<Setup, Phaser.GameObjects.Rectangle> = {} as never;
-  private riskBoxes: Record<Risk, Phaser.GameObjects.Rectangle> = {} as never;
   private bikeText!: Phaser.GameObjects.Text;
   private rndText!: Phaser.GameObjects.Text;
 
@@ -42,29 +39,21 @@ export class SeasonScene extends Phaser.Scene {
     });
     this.refreshBike();
 
-    // Setup selector
-    this.add.text(40, 268, 'Setup (match the track)', { fontSize: '18px', color: '#e0e0e0' });
+    // Setup selector (Risk is now an in-race decision on the race-day screen)
+    this.add.text(40, 280, 'Setup (match the track)', { fontSize: '18px', color: '#e0e0e0' });
     SETUPS.forEach((st, i) => {
-      const box = this.add.rectangle(130 + i * 200, 308, 184, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(130 + i * 200, 308, SETUP_LABEL[st], { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(130 + i * 200, 322, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(130 + i * 200, 322, SETUP_LABEL[st], { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { this.setup = st; this.refreshSelectors(); });
       this.setupBoxes[st] = box;
     });
-
-    // Risk selector
-    this.add.text(40, 360, 'Risk (push vs crash)', { fontSize: '18px', color: '#e0e0e0' });
-    RISKS.forEach((rk, i) => {
-      const box = this.add.rectangle(130 + i * 200, 400, 184, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(130 + i * 200, 400, RISK_LABEL[rk], { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
-      box.on('pointerup', () => { this.risk = rk; this.refreshSelectors(); });
-      this.riskBoxes[rk] = box;
-    });
     this.refreshSelectors();
+    this.add.text(40, 372, 'Risk is your call during the race — Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
 
     this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
     renderStandings(this, 720, 120, getStandings(this.season));
 
-    new Button(this, { x: 320, y: 700, width: 280, height: 56, label: 'SIMULATE RACE', onClick: () => this.simulate() });
+    new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => this.simulate() });
   }
 
   private refreshBike(): void {
@@ -75,15 +64,11 @@ export class SeasonScene extends Phaser.Scene {
 
   private refreshSelectors(): void {
     SETUPS.forEach((st) => this.setupBoxes[st].setFillStyle(st === this.setup ? 0x0f3460 : 0x16213e).setStrokeStyle(2, st === this.setup ? 0xf5c518 : 0x0f3460));
-    RISKS.forEach((rk) => this.riskBoxes[rk].setFillStyle(rk === this.risk ? 0x0f3460 : 0x16213e).setStrokeStyle(2, rk === this.risk ? 0xf5c518 : 0x0f3460));
   }
 
   private simulate(): void {
     const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
-    const { result, timeline } = runRace(this.season, this.setup, this.risk, rng);
-    const summaries = applyProgression([this.season.playerRider, ...this.season.aiRiders], result);
-    applyRaceResult(this.season, result);
-    const playerSummary = summaries.find((su) => su.riderId === 'player')!;
-    this.scene.start('RaceScene', { season: this.season, result, timeline, playerSummary });
+    const run = createRace(this.season, this.setup, rng);
+    this.scene.start('RaceScene', { season: this.season, run });
   }
 }

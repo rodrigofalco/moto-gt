@@ -2,107 +2,168 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { buildPath, pointAt, type SampledPath } from '../core/Path';
 import { TRACK_LAYOUTS } from '../data/trackLayouts';
-import { RACE_LAPS, RACE_ANIM_SECONDS } from '../core/constants';
-import type { SeasonState, RaceResult, RaceTimeline } from '../core/types';
-import type { ProgressionSummary } from '../core/Progression';
+import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS } from '../core/constants';
+import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
+import { applyProgression } from '../core/Progression';
+import { applyRaceResult } from '../core/Championship';
+import type { SeasonState, Risk } from '../core/types';
 
-// Maps the normalized [0,1] path into a screen rectangle.
-const OX = 80, OY = 90, W = 600, H = 560;
+const OX = 70, OY = 110, W = 560, H = 470;
+const ORDER: { risk: Risk; label: string }[] = [
+  { risk: 'low', label: 'Settle' }, { risk: 'medium', label: 'Defend' }, { risk: 'high', label: 'Attack' },
+];
 
-interface SceneData { season: SeasonState; result: RaceResult; timeline: RaceTimeline; playerSummary: ProgressionSummary; }
+interface SceneData { season: SeasonState; run: RaceRun; }
+interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; }
 
 export class RaceScene extends Phaser.Scene {
-  private raceData!: SceneData;
+  private sd!: SceneData;
   private path!: SampledPath;
-  private dots: Map<string, Phaser.GameObjects.Arc> = new Map();
-  private finalLeaderProgress = 1;
-  private elapsedMs = 0;
+  private gfx: Map<string, DotGfx> = new Map();
+  private numbers: Map<string, number> = new Map();
+  private progressPerLoop = 7;
+  private prev: Map<string, number> = new Map();
+  private cur: Map<string, number> = new Map();
+  private lapsDone = 0;
+  private acc = 0;
+  private speed = 1;
+  private order: Risk = 'medium';
+  private done = false;
   private lapText!: Phaser.GameObjects.Text;
   private orderText!: Phaser.GameObjects.Text;
-  private done = false;
+  private orderBoxes: Phaser.GameObjects.Rectangle[] = [];
+  private speedBoxes: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() { super('RaceScene'); }
-  init(data: SceneData): void { this.raceData = data; this.elapsedMs = 0; this.done = false; this.dots = new Map(); }
+  init(data: SceneData): void {
+    this.sd = data; this.gfx = new Map(); this.numbers = new Map();
+    this.prev = new Map(); this.cur = new Map();
+    this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = 'medium'; this.done = false;
+    this.orderBoxes = []; this.speedBoxes = [];
+  }
 
   create(): void {
-    const track = this.raceData.result.track;
-    this.add.text(OX, 30, `Race Day — ${track.name}`, { fontSize: '24px', color: '#f5c518' });
+    const run = this.sd.run;
+    this.add.text(OX, 28, `Race Day — ${run.track.name}`, { fontSize: '24px', color: '#f5c518' });
 
-    this.path = buildPath(TRACK_LAYOUTS[track.id].points);
+    this.path = buildPath(TRACK_LAYOUTS[run.track.id].points);
     this.drawTrack();
 
-    const lastLap = this.raceData.timeline.laps[this.raceData.timeline.laps.length - 1];
-    this.finalLeaderProgress = Math.max(1, ...lastLap.entries.filter((e) => !e.crashed).map((e) => e.progress));
+    this.progressPerLoop = run.states.reduce((a, s) => a + s.basePace, 0) / run.states.length || 7;
 
-    for (const e of lastLap.entries) {
-      const rider = this.riderById(e.riderId);
-      const dot = this.add.circle(OX, OY, rider.isPlayer ? 8 : 6, rider.isPlayer ? 0xf5c518 : 0x4fc3f7).setStrokeStyle(2, 0x1a1a2e);
-      this.dots.set(e.riderId, dot);
+    const grid = [this.sd.season.playerRider, ...this.sd.season.aiRiders];
+    grid.forEach((r, i) => this.numbers.set(r.id, i + 1));
+
+    for (const s of run.states) {
+      const r = s.rider;
+      const color = BRAND_COLORS[r.brandId] ?? 0x4fc3f7;
+      const ring = r.isPlayer ? this.add.circle(OX, OY, 12).setStrokeStyle(3, 0xf5c518) : undefined;
+      const dot = this.add.circle(OX, OY, r.isPlayer ? 9 : 7, color).setStrokeStyle(2, 0x1a1a2e);
+      const num = this.add.text(OX, OY, String(this.numbers.get(r.id)), { fontSize: '11px', color: '#0b0b14', fontStyle: 'bold' }).setOrigin(0.5);
+      this.gfx.set(r.id, { dot, ring, num });
+      this.prev.set(r.id, 0);
+      this.cur.set(r.id, 0);
     }
 
-    this.lapText = this.add.text(720, 90, '', { fontSize: '20px', color: '#f5c518' });
-    this.orderText = this.add.text(720, 130, '', { fontFamily: 'monospace', fontSize: '14px', color: '#e0e0e0' });
+    this.lapText = this.add.text(700, 110, '', { fontSize: '20px', color: '#f5c518' });
+    this.orderText = this.add.text(700, 146, '', { fontFamily: 'monospace', fontSize: '14px', color: '#e0e0e0' });
 
-    new Button(this, { x: 880, y: 700, width: 180, height: 48, label: 'SKIP', onClick: () => this.finish() });
+    // Order radio (live risk).
+    this.add.text(70, 612, 'Orders', { fontSize: '16px', color: '#e0e0e0' });
+    ORDER.forEach((o, i) => {
+      const box = this.add.rectangle(140 + i * 150, 648, 140, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(140 + i * 150, 648, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      box.on('pointerup', () => { this.order = o.risk; this.refreshOrder(); });
+      this.orderBoxes.push(box);
+    });
+    this.refreshOrder();
+
+    // Speed control.
+    this.add.text(640, 612, 'Speed', { fontSize: '16px', color: '#e0e0e0' });
+    RACE_SPEEDS.forEach((sp, i) => {
+      const box = this.add.rectangle(700 + i * 70, 648, 60, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(700 + i * 70, 648, `${sp}x`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+      box.on('pointerup', () => { this.speed = sp; this.refreshSpeed(); });
+      this.speedBoxes.push(box);
+    });
+    this.refreshSpeed();
+
+    new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
     this.renderFrame(0);
   }
 
-  private riderById(id: string) {
-    return [this.raceData.season.playerRider, ...this.raceData.season.aiRiders].find((r) => r.id === id)!;
+  private refreshOrder(): void {
+    ORDER.forEach((o, i) => this.orderBoxes[i].setFillStyle(o.risk === this.order ? 0x0f3460 : 0x16213e).setStrokeStyle(2, o.risk === this.order ? 0xf5c518 : 0x0f3460));
+  }
+  private refreshSpeed(): void {
+    RACE_SPEEDS.forEach((sp, i) => this.speedBoxes[i].setFillStyle(sp === this.speed ? 0x0f3460 : 0x16213e).setStrokeStyle(2, sp === this.speed ? 0xf5c518 : 0x0f3460));
   }
 
   private drawTrack(): void {
     const g = this.add.graphics();
     const pts = this.path.samples.map((p) => new Phaser.Math.Vector2(OX + p.x * W, OY + p.y * H));
-    g.lineStyle(10, 0x16213e);
-    g.strokePoints(pts, true, true);
-    g.lineStyle(2, 0x0f3460);
-    g.strokePoints(pts, true, true);
+    g.lineStyle(10, 0x16213e); g.strokePoints(pts, true, true);
+    g.lineStyle(2, 0x0f3460); g.strokePoints(pts, true, true);
   }
 
-  private progressAt(riderId: string, tau: number): number {
-    const laps = this.raceData.timeline.laps;
-    const x = tau * laps.length;
-    const i = Math.min(laps.length - 1, Math.floor(x));
-    const frac = x - i;
-    const cur = laps[i].entries.find((e) => e.riderId === riderId)!.progress;
-    const prev = i === 0 ? 0 : laps[i - 1].entries.find((e) => e.riderId === riderId)!.progress;
-    return prev + (cur - prev) * frac;
+  private snapshot(target: Map<string, number>): void {
+    for (const s of this.sd.run.states) target.set(s.rider.id, s.progress);
   }
 
-  private renderFrame(tau: number): void {
-    const lastLap = this.raceData.timeline.laps[this.raceData.timeline.laps.length - 1];
+  private advanceOneLap(): void {
+    this.snapshot(this.prev);
+    stepLap(this.sd.run, this.order);
+    this.snapshot(this.cur);
+    this.lapsDone += 1;
+  }
+
+  private renderFrame(frac: number): void {
     const standings: { id: string; prog: number }[] = [];
-    for (const e of lastLap.entries) {
-      const prog = this.progressAt(e.riderId, tau);
-      const loops = (prog / this.finalLeaderProgress) * RACE_LAPS;
-      const pt = pointAt(this.path, loops % 1);
-      const dot = this.dots.get(e.riderId)!;
-      dot.setPosition(OX + pt.x * W, OY + pt.y * H);
-      if (e.crashed && tau >= 0.985) dot.setFillStyle(0xff1744);
-      standings.push({ id: e.riderId, prog });
+    for (const s of this.sd.run.states) {
+      const id = s.rider.id;
+      const p = (this.prev.get(id) ?? 0) + ((this.cur.get(id) ?? 0) - (this.prev.get(id) ?? 0)) * frac;
+      // Small grid offset by start number so a tight pack (and the start line) stays legible.
+      const offset = ((this.numbers.get(id) ?? 1) - 1) * 0.012;
+      const loops = p / this.progressPerLoop - offset;
+      const pt = pointAt(this.path, ((loops % 1) + 1) % 1);
+      const g = this.gfx.get(id)!;
+      const sx = OX + pt.x * W, sy = OY + pt.y * H;
+      g.dot.setPosition(sx, sy); g.num.setPosition(sx, sy);
+      if (g.ring) g.ring.setPosition(sx, sy);
+      if (s.crashed) g.dot.setFillStyle(0xff1744);
+      standings.push({ id, prog: s.progress });
     }
     standings.sort((a, b) => b.prog - a.prog);
-    const lap = Math.min(RACE_LAPS, Math.floor(tau * RACE_LAPS) + 1);
-    this.lapText.setText(`Lap ${lap} / ${RACE_LAPS}`);
-    this.orderText.setText(standings.slice(0, 10).map((s, i) => {
-      const r = this.riderById(s.id);
+    this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone + 1)} / ${RACE_LAPS}`);
+    this.orderText.setText(standings.map((st, i) => {
+      const r = this.sd.run.states.find((x) => x.rider.id === st.id)!.rider;
       const tag = r.isPlayer ? '>' : ' ';
-      return `${tag}${String(i + 1).padStart(2)} ${r.name.slice(0, 14)}`;
+      return `${tag}${String(i + 1).padStart(2)} #${String(this.numbers.get(st.id)).padStart(2)} ${r.name.slice(0, 13)}`;
     }).join('\n'));
   }
 
-  update(_time: number, delta: number): void {
+  update(_t: number, delta: number): void {
     if (this.done) return;
-    this.elapsedMs += delta;
-    const tau = Math.min(1, this.elapsedMs / (RACE_ANIM_SECONDS * 1000));
-    this.renderFrame(tau);
-    if (tau >= 1) { this.done = true; this.time.delayedCall(800, () => this.goToResult()); }
+    const lapMs = (RACE_ANIM_SECONDS * 1000) / RACE_LAPS;
+    this.acc += delta * this.speed;
+    while (this.acc >= lapMs && this.lapsDone < RACE_LAPS) { this.advanceOneLap(); this.acc -= lapMs; }
+    if (this.lapsDone >= RACE_LAPS) { this.renderFrame(1); this.done = true; this.time.delayedCall(900, () => this.finish()); return; }
+    this.renderFrame(Math.min(1, this.acc / lapMs));
   }
 
-  private finish(): void { if (!this.done) { this.done = true; this.goToResult(); } }
+  private skip(): void {
+    if (this.done) return;
+    while (this.lapsDone < RACE_LAPS) this.advanceOneLap();
+    this.done = true;
+    this.finish();
+  }
 
-  private goToResult(): void {
-    this.scene.start('RaceResultScene', { season: this.raceData.season, result: this.raceData.result, playerSummary: this.raceData.playerSummary });
+  private finish(): void {
+    const run = this.sd.run;
+    const result = finalizeRace(run, run.rng);
+    const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);
+    applyRaceResult(this.sd.season, result);
+    const playerSummary = summaries.find((su) => su.riderId === 'player')!;
+    this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary });
   }
 }
