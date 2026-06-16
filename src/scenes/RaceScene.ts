@@ -169,8 +169,11 @@ export class RaceScene extends Phaser.Scene {
       const last = this.displayProg.get(id) ?? trueP;
       const disp = last + (trueP - last) * EMA;
       this.displayProg.set(id, disp);
-      // Small grid offset by start number so a tight pack (and the start line) stays legible.
-      const offset = ((this.numbers.get(id) ?? 1) - 1) * 0.012;
+      // Start as a clear staggered grid (large offset by start number) that fades to a
+      // small anti-overlap offset by ~lap 2, so early laps read as a grid and later laps
+      // show true gaps.
+      const gridFade = Math.max(0, 1 - (this.lapsDone + frac) / 2);
+      const offset = ((this.numbers.get(id) ?? 1) - 1) * (0.006 + 0.020 * gridFade);
       const loops = disp / this.progressPerLoop - offset;
       const pt = pointAt(this.path, ((loops % 1) + 1) % 1);
       const g = this.gfx.get(id)!;
