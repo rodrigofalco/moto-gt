@@ -6,13 +6,14 @@ import { getStandings } from '../core/Championship';
 import { investBikePoint } from '../core/Progression';
 import { RNG } from '../core/RNG';
 import { SETUPS } from '../core/constants';
+import { recommendedSetup } from '../core/Advice';
 import type { SeasonState, Setup, BikeParams } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
 
 export class SeasonScene extends Phaser.Scene {
   private season!: SeasonState;
-  private setup: Setup = 'handling';
+  private setup!: Setup;
   private setupBoxes: Record<Setup, Phaser.GameObjects.Rectangle> = {} as never;
   private bikeText!: Phaser.GameObjects.Text;
   private rndText!: Phaser.GameObjects.Text;
@@ -23,13 +24,15 @@ export class SeasonScene extends Phaser.Scene {
   create(): void {
     const idx = this.season.currentRaceIndex;
     const track = this.season.calendar[idx];
+    this.setup = recommendedSetup(track.weights);
     this.add.text(40, 24, `Race ${idx + 1} of ${this.season.calendar.length} — ${track.name}`, { fontSize: '24px', color: '#f5c518' });
     this.add.text(40, 60, `Track focus   Speed ${track.weights.speed.toFixed(2)}   Cornering ${track.weights.cornering.toFixed(2)}   Accel ${track.weights.acceleration.toFixed(2)}`, { fontSize: '15px', color: '#94a3b8' });
-    const w = track.weights;
-    const hint = w.speed >= w.cornering && w.speed >= w.acceleration ? 'Power track → Top Speed setup favored'
-      : w.cornering >= w.acceleration ? 'Technical track → Handling setup favored'
-      : 'Stop-go track → Acceleration setup favored';
-    this.add.text(40, 84, hint, { fontSize: '15px', color: '#00e5ff' });
+    const HINT: Record<Setup, string> = {
+      topSpeed: 'Power track → Top Speed setup favored',
+      handling: 'Technical track → Handling setup favored',
+      acceleration: 'Stop-go track → Acceleration setup favored',
+    };
+    this.add.text(40, 84, HINT[this.setup], { fontSize: '15px', color: '#00e5ff' });
 
     const s = this.season.playerRider.skills;
     this.add.text(40, 108, `Pilot   Pace ${s.pace}   Cornering ${s.cornering}   Consistency ${s.consistency}`, { fontSize: '16px', color: '#e0e0e0' });
@@ -52,6 +55,8 @@ export class SeasonScene extends Phaser.Scene {
       box.on('pointerup', () => { this.setup = st; this.refreshSelectors(); });
       this.setupBoxes[st] = box;
     });
+    const recIdx = SETUPS.indexOf(this.setup);
+    this.add.text(130 + recIdx * 200, 298, '★ Recommended', { fontSize: '13px', color: '#f5c518' }).setOrigin(0.5);
     this.refreshSelectors();
     this.add.text(40, 372, 'Risk is your call during the race — Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
 
