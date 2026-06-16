@@ -36,13 +36,15 @@ export class RaceScene extends Phaser.Scene {
   private displayProg: Map<string, number> = new Map();   // smoothed progress for on-track motion
   private chaseRing!: Phaser.GameObjects.Arc;             // marks the rider just ahead of the player
   private calloutText!: Phaser.GameObjects.Text;
+  private flashText!: Phaser.GameObjects.Text;            // brief overtake gained/lost flash
+  private prevPlayerPos = -1;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
     this.sd = data; this.gfx = new Map(); this.numbers = new Map();
     this.prev = new Map(); this.cur = new Map(); this.displayProg = new Map();
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = 'medium'; this.done = false;
-    this.orderBoxes = []; this.speedBoxes = [];
+    this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
   }
 
   create(): void {
@@ -76,6 +78,7 @@ export class RaceScene extends Phaser.Scene {
     this.lapText = this.add.text(700, 110, '', { fontSize: '20px', color: '#f5c518' });
     this.orderText = this.add.text(700, 146, '', { fontFamily: 'monospace', fontSize: '14px', color: '#e0e0e0' });
     this.calloutText = this.add.text(70, 590, '', { fontSize: '16px', color: '#00e5ff' });
+    this.flashText = this.add.text(370, 590, '', { fontSize: '18px', color: '#00c853', fontStyle: 'bold' }).setOrigin(0, 0.5).setAlpha(0);
 
     // Order radio (live risk).
     this.add.text(70, 612, 'Orders', { fontSize: '16px', color: '#e0e0e0' });
@@ -197,6 +200,17 @@ export class RaceScene extends Phaser.Scene {
       this.chaseRing.setVisible(false);
       this.calloutText.setText('You are leading the race!');
     }
+
+    // Overtake flash when the player's position changes (only at lap boundaries).
+    const curPos = playerIdx + 1;
+    if (this.prevPlayerPos !== -1 && curPos !== this.prevPlayerPos && !me?.crashed) {
+      const gained = curPos < this.prevPlayerPos;
+      this.flashText.setText(`${gained ? '▲' : '▼'} P${this.prevPlayerPos} → P${curPos}`)
+        .setColor(gained ? '#00c853' : '#ff5f7a').setAlpha(1);
+      this.tweens.killTweensOf(this.flashText);
+      this.tweens.add({ targets: this.flashText, alpha: 0, duration: 1400, ease: 'Quad.easeIn' });
+    }
+    this.prevPlayerPos = curPos;
   }
 
   update(_t: number, delta: number): void {
