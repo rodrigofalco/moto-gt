@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { crashProbability, crashPenalty } from '../src/core/CrashModel';
-import { RNG } from '../src/core/RNG';
+import { crashProbability } from '../src/core/CrashModel';
 import type { Track } from '../src/core/types';
 
 const technical: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.2, cornering: 0.6, acceleration: 0.2 } };
@@ -19,13 +18,8 @@ describe('CrashModel', () => {
     expect(crashProbability('high', 10, technical)).toBeLessThan(crashProbability('high', 1, technical));
   });
 
-  it('clamps into [0, 0.9] and penalty in [12,20]', () => {
+  it('clamps into [0, 0.9]', () => {
     expect(crashProbability('high', 1, technical)).toBeLessThanOrEqual(0.9);
-    const r = new RNG(1);
-    for (let i = 0; i < 500; i++) {
-      const p = crashPenalty(r);
-      expect(p).toBeGreaterThanOrEqual(12);
-      expect(p).toBeLessThanOrEqual(20);
-    }
+    expect(crashProbability('low', 10, fast)).toBeGreaterThanOrEqual(0);
   });
 });

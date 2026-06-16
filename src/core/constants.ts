@@ -20,10 +20,7 @@ export const CONSISTENCY_DIVISOR = 15;
 export const CONSISTENCY_FLOOR = 0.35;
 export const CRASH_TECH_FACTOR = 7.0;
 export const CRASH_TECH_THRESHOLD = 0.30;
-// A crash must reliably drop the rider to the back (≈ DNF), so the penalty is large
-// relative to the ~5–9 performance spread of the field.
-export const CRASH_PENALTY_BASE = 12.0;
-export const CRASH_PENALTY_RANGE = 8.0;
+// (crash = DNF via finishing-order in RaceEngine; no score-penalty constant needed)
 
 export const SETUPS: readonly Setup[] = ['topSpeed', 'handling', 'acceleration'];
 export const RISKS: readonly Risk[] = ['low', 'medium', 'high'];
