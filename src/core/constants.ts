@@ -40,3 +40,11 @@ export const RND_WIN = 1;
 // Balance targets
 export const TARGET_BUILD_RATE: readonly [number, number] = [0.25, 0.45];
 export const MAX_BUILD_RATE_SPREAD = 0.15;
+
+// Race-day (Phase B)
+export const RACE_LAPS = 14;
+// basePace accumulates over N laps (×N) while noise grows only ×√N, so to preserve
+// Phase A's signal-to-noise ratio the per-lap noise must be NOISE_STD_DEV·√N, not /√N.
+// Tuned around that value to restore co-equal ~25–45% win rates with the lap engine.
+export const LAP_NOISE_STD = NOISE_STD_DEV * Math.sqrt(RACE_LAPS); // ≈ 3.74
+export const RACE_ANIM_SECONDS = 18;

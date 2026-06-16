@@ -47,3 +47,13 @@ export interface SeasonState {
   raceResults: RaceResult[];
   isSeasonComplete: boolean;
 }
+
+export interface LapSnapshot {
+  lap: number;
+  entries: { riderId: string; progress: number; crashed: boolean }[];
+}
+
+export interface RaceTimeline {
+  laps: LapSnapshot[];
+  totalLaps: number;
+}
