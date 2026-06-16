@@ -14,9 +14,9 @@
 ---
 
 ## Backlog (priority order)
-1. [ ] **Balance sweep & report** — Monte Carlo over all 6 pilots × 4 brands (24 combos) + per-track build win rates. Findings → this log. (analysis first; informs the rest)
-2. [ ] **Unique AI names** — kill "Sven Larsson 2" duplicates (expand name pool).
-3. [ ] **Dead code** — remove now-unused `crashPenalty` (crashes are DNF ordering now).
+1. [x] **Balance sweep & report** — done; see F1 findings.
+2. [x] **Unique AI names** — done (`9f5aea6`).
+3. [x] **Dead code** — done (`crashPenalty` removed).
 4. [ ] **Race-day: finish line + start marker** on the track.
 5. [ ] **Race-day: overtake flash** — brief highlight when the player gains/loses a place.
 6. [ ] **Race-day: anti-overlap nudge** for tightly-packed dots.
@@ -49,3 +49,4 @@ Best combo:  Hotshot + Vortex 51%   |   Worst:  Metronome + Apex 21%
 ## Change log
 - `9f5aea6` **Unique AI names** — added `AI_EXTRA_NAMES`; AI no longer show "X 2". Test asserts 9 unique. ✓ tests+build.
 - `8c02b8b` **Balance sweep tool** — `tests/sweep.test.ts` writes `/tmp/sweep-report.txt`; added `node` to tsconfig types. ✓ tests+build.
+- `_dead-code_` **Removed `crashPenalty`** + `CRASH_PENALTY_*` constants; updated crash test. ✓ tests(49)+build.
