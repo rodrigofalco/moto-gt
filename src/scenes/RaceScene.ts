@@ -51,6 +51,7 @@ export class RaceScene extends Phaser.Scene {
 
     this.path = buildPath(TRACK_LAYOUTS[run.track.id].points);
     this.drawTrack();
+    this.drawFinishLine();
 
     this.progressPerLoop = run.states.reduce((a, s) => a + s.basePace, 0) / run.states.length || 7;
 
@@ -112,6 +113,24 @@ export class RaceScene extends Phaser.Scene {
     const pts = this.path.samples.map((p) => new Phaser.Math.Vector2(OX + p.x * W, OY + p.y * H));
     g.lineStyle(10, 0x16213e); g.strokePoints(pts, true, true);
     g.lineStyle(2, 0x0f3460); g.strokePoints(pts, true, true);
+  }
+
+  // Checkered start/finish bar across the track at t=0, perpendicular to the racing line.
+  private drawFinishLine(): void {
+    const p0 = pointAt(this.path, 0);
+    const p1 = pointAt(this.path, 0.012);
+    const ax = OX + p0.x * W, ay = OY + p0.y * H;
+    const dx = (OX + p1.x * W) - ax, dy = (OY + p1.y * H) - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len; // unit perpendicular
+    const half = 18, cells = 6;
+    const g = this.add.graphics();
+    for (let i = 0; i < cells; i++) {
+      const t0 = -half + (2 * half) * (i / cells);
+      const t1 = -half + (2 * half) * ((i + 1) / cells);
+      g.lineStyle(7, i % 2 === 0 ? 0xffffff : 0x0b0b14);
+      g.lineBetween(ax + nx * t0, ay + ny * t0, ax + nx * t1, ay + ny * t1);
+    }
   }
 
   private snapshot(target: Map<string, number>): void {
