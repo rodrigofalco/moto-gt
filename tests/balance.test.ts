@@ -91,4 +91,24 @@ describe('balance harness', () => {
     console.log(`risk adaptive ${(adaptive * 100).toFixed(1)}% vs always-low ${(alwaysLow * 100).toFixed(1)}%`);
     expect(adaptive - alwaysLow).toBeGreaterThanOrEqual(0.04);
   });
+
+  it('crash rate stays in a sane band under a reasonable policy', () => {
+    let races = 0, crashes = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const rng = new RNG(seed);
+      const season = createSeason('Me', BAL.pilot, BAL.brand, rng);
+      while (!season.isSeasonComplete) {
+        const track = season.calendar[season.currentRaceIndex];
+        const result = simulateRace(season, dominantSetup(track), policyRisk(track, season.playerRider.skills.consistency), rng);
+        const me = result.finishingOrder.find((e) => e.rider.isPlayer)!;
+        races++; if (me.crashed) crashes++;
+        applyProgression([season.playerRider, ...season.aiRiders], result);
+        applyRaceResult(season, result);
+      }
+    }
+    const crashRate = crashes / races;
+    console.log(`player crash rate ${(crashRate * 100).toFixed(1)}%`);
+    expect(crashRate).toBeGreaterThan(0.03);
+    expect(crashRate).toBeLessThan(0.30);
+  });
 });
