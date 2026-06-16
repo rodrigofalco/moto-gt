@@ -36,7 +36,7 @@ describe('RaceEngine', () => {
     const b = runRace(mkSeason(), 'topSpeed', 'medium', new RNG(42));
     expect(a.result.finishingOrder.map((f) => f.rider.id))
       .toEqual(b.result.finishingOrder.map((f) => f.rider.id));
-    expect(a.timeline.laps.at(-1)!.entries).toEqual(b.timeline.laps.at(-1)!.entries);
+    expect(a.timeline.laps[a.timeline.laps.length - 1].entries).toEqual(b.timeline.laps[b.timeline.laps.length - 1].entries);
   });
 
   it('crashed riders finish behind all non-crashed riders', () => {

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
-import { simulateRace } from '../core/RaceSimulator';
+import { runRace } from '../core/RaceEngine';
 import { applyRaceResult, getStandings } from '../core/Championship';
 import { applyProgression, investBikePoint } from '../core/Progression';
 import { RNG } from '../core/RNG';
@@ -80,10 +80,10 @@ export class SeasonScene extends Phaser.Scene {
 
   private simulate(): void {
     const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
-    const result = simulateRace(this.season, this.setup, this.risk, rng);
+    const { result, timeline } = runRace(this.season, this.setup, this.risk, rng);
     const summaries = applyProgression([this.season.playerRider, ...this.season.aiRiders], result);
     applyRaceResult(this.season, result);
     const playerSummary = summaries.find((su) => su.riderId === 'player')!;
-    this.scene.start('RaceResultScene', { season: this.season, result, playerSummary });
+    this.scene.start('RaceScene', { season: this.season, result, timeline, playerSummary });
   }
 }
