@@ -34,6 +34,7 @@ export class RaceResultScene extends Phaser.Scene {
     const msg = levels.length ? `Pilot improved: ${levels.map((l) => `+1 ${l}`).join(', ')}.   ` : '';
     this.add.text(40, 360, `${msg}Earned ${this.playerSummary.rndEarned} development points.`, { fontSize: '16px', color: '#00c853' });
 
+    this.add.text(620, 36, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontSize: '14px', color: '#94a3b8' });
     this.add.text(620, 60, 'Standings', { fontSize: '20px', color: '#f5c518' });
     this.renderStandingsWithArrows(620, 90);
 
@@ -43,6 +44,7 @@ export class RaceResultScene extends Phaser.Scene {
   // Championship standings with ▲/▼/— vs the order before this race.
   private renderStandingsWithArrows(x: number, y: number): void {
     const standings = getStandings(this.season);
+    const leaderPoints = standings[0]?.points ?? 0;
     const thisRacePts = new Map(this.result.finishingOrder.map((e) => [e.rider.id, e.pointsAwarded]));
     const hasPrev = this.season.raceResults.length >= 2;
     const prev = [...standings].sort((a, b) =>
@@ -53,7 +55,8 @@ export class RaceResultScene extends Phaser.Scene {
       const was = prevPos.get(r.id) ?? cur;
       const arrow = !hasPrev ? ' ' : cur < was ? '▲' : cur > was ? '▼' : '—';
       const tag = r.isPlayer ? '>' : ' ';
-      return `${tag}${String(cur).padStart(2)} ${arrow} ${r.name.slice(0, 16).padEnd(16)} ${String(r.points).padStart(3)}`;
+      const gap = i === 0 ? '' : `+${leaderPoints - r.points}`;
+      return `${tag}${String(cur).padStart(2)} ${arrow} ${r.name.slice(0, 16).padEnd(16)} ${String(r.points).padStart(3)}  ${gap.padStart(4)}`;
     });
     this.add.text(x, y, lines.join('\n'), { fontFamily: 'monospace', fontSize: '15px', color: '#e0e0e0' });
   }
@@ -70,7 +73,7 @@ export class RaceResultScene extends Phaser.Scene {
     this.drawPodium(standings);
 
     this.add.text(512, 372, 'Final Standings', { fontSize: '18px', color: '#f5c518' }).setOrigin(0.5);
-    renderStandings(this, 400, 398, standings);
+    renderStandings(this, 400, 398, standings, { showGap: true });
     new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'PLAY AGAIN', onClick: () => this.scene.start('MainMenuScene') });
   }
 

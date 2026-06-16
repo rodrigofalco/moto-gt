@@ -60,8 +60,9 @@ export class SeasonScene extends Phaser.Scene {
     this.refreshSelectors();
     this.add.text(40, 372, 'Risk is your call during the race — Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
 
+    this.add.text(720, 64, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontSize: '14px', color: '#94a3b8' });
     this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
-    renderStandings(this, 720, 120, getStandings(this.season));
+    renderStandings(this, 720, 120, getStandings(this.season), { showGap: true });
 
     new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => this.simulate() });
   }
