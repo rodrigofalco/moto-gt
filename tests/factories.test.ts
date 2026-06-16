@@ -21,6 +21,7 @@ describe('factories', () => {
     const ai = generateAIRiders(PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(1));
     expect(ai).toHaveLength(9);
     expect(new Set(ai.map((r) => r.id)).size).toBe(9);
+    expect(new Set(ai.map((r) => r.name)).size).toBe(9); // unique names, no "Rider 2" dupes
   });
 
   it('createSeason assembles 1 player + 9 AI + 6 tracks', () => {

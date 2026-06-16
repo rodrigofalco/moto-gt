@@ -9,3 +9,10 @@ export const PILOT_ROSTER: readonly PilotArchetype[] = [
   { id: 'tanaka',    name: 'Yuki Tanaka',    nickname: 'The Hotshot',         skills: { pace: 9, cornering: 8, consistency: 3 } },
   { id: 'lindqvist', name: 'Sara Lindqvist', nickname: 'The Smooth Operator', skills: { pace: 5, cornering: 8, consistency: 7 } },
 ];
+
+// Extra distinct names for AI riders beyond the 5 non-player archetypes, so no AI
+// rider shares a name (they borrow an archetype's skills but get their own identity).
+export const AI_EXTRA_NAMES: readonly string[] = [
+  'Otto Nilsson', 'Rafa Mendes', 'Kai Brenner', 'Tom Halloran',
+  'Nico Fontana', 'Ivan Petrov', 'Leo Castille', 'Max Dunne',
+];
