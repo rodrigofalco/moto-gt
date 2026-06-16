@@ -19,5 +19,5 @@ export function createSeason(team: string, pilot: PilotArchetype, brand: Brand, 
   const playerRider = createPlayerRider(team, pilot, brand);
   const aiRiders = generateAIRiders(pilot.id, brand.id, rng);
   const calendar: Track[] = shuffle(TRACK_BANK, rng).slice(0, SEASON_RACE_COUNT);
-  return { playerRider, aiRiders, calendar, currentRaceIndex: 0, raceResults: [], isSeasonComplete: false };
+  return { playerRider, aiRiders, calendar, currentRaceIndex: 0, raceResults: [], isSeasonComplete: false, lastRisk: 'medium' };
 }

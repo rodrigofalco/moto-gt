@@ -43,7 +43,7 @@ export class RaceScene extends Phaser.Scene {
   init(data: SceneData): void {
     this.sd = data; this.gfx = new Map(); this.numbers = new Map();
     this.prev = new Map(); this.cur = new Map(); this.displayProg = new Map();
-    this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = 'medium'; this.done = false;
+    this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = data.season.lastRisk ?? 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
   }
 
@@ -85,7 +85,7 @@ export class RaceScene extends Phaser.Scene {
     ORDER.forEach((o, i) => {
       const box = this.add.rectangle(140 + i * 150, 648, 140, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
       this.add.text(140 + i * 150, 648, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
-      box.on('pointerup', () => { this.order = o.risk; this.refreshOrder(); });
+      box.on('pointerup', () => { this.order = o.risk; this.sd.season.lastRisk = o.risk; this.refreshOrder(); });
       this.orderBoxes.push(box);
     });
     this.refreshOrder();
