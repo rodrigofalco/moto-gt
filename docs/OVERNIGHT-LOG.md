@@ -17,10 +17,10 @@
 1. [x] **Balance sweep & report** — done; see F1 findings.
 2. [x] **Unique AI names** — done (`9f5aea6`).
 3. [x] **Dead code** — done (`crashPenalty` removed).
-4. [ ] **Race-day: finish line + start marker** on the track.
-5. [ ] **Race-day: overtake flash** — brief highlight when the player gains/loses a place.
-6. [ ] **Race-day: anti-overlap nudge** for tightly-packed dots.
-7. [ ] **Result screen: standings movement arrows** (▲▼—) vs previous race.
+4. [x] **Race-day: finish line** — checkered start/finish bar.
+5. [x] **Race-day: overtake flash** — ▲/▼ Pn→Pm when the player changes place.
+6. [ ] **Race-day: anti-overlap nudge** — deferred (grid-offset + EMA already keep packs legible; risk of jitter, low priority).
+7. [x] **Result screen: standings movement arrows** (▲▼—) vs previous race.
 8. [ ] **Season-end: podium visual** (top 3).
 9. [ ] **Race-day: legend/help** (orders, brand colors).
 10. [ ] **Balance experiment (bold):** try a variant if the sweep shows a dominant/weak build; measure; keep only if it improves spread, else document and revert.
@@ -50,3 +50,6 @@ Best combo:  Hotshot + Vortex 51%   |   Worst:  Metronome + Apex 21%
 - `9f5aea6` **Unique AI names** — added `AI_EXTRA_NAMES`; AI no longer show "X 2". Test asserts 9 unique. ✓ tests+build.
 - `8c02b8b` **Balance sweep tool** — `tests/sweep.test.ts` writes `/tmp/sweep-report.txt`; added `node` to tsconfig types. ✓ tests+build.
 - `_dead-code_` **Removed `crashPenalty`** + `CRASH_PENALTY_*` constants; updated crash test. ✓ tests(49)+build.
+- **Finish line** — checkered start/finish bar on the track. ✓ browser-verified.
+- **Overtake flash** — ▲/▼ Pn→Pm on place change (fades out). ✓ browser-verified (saw ▼P6→P7).
+- **Movement arrows** — ▲▼— on result-screen standings vs the order before the race. ✓ browser-verified.
