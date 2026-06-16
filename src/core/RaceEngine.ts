@@ -5,10 +5,18 @@ import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
 import type { RNG } from './RNG';
 
-interface RiderState {
-  rider: Rider; setup: Setup; risk: Risk;
-  basePace: number; axes: Axes;
+export interface RiderState {
+  rider: Rider; setup: Setup; aiRisk: Risk; lastRisk: Risk;
+  basePace: number; axes: Axes;            // basePace excludes push (push is applied per lap by risk)
   progress: number; crashed: boolean; crashLap: number;
+}
+
+export interface RaceRun {
+  raceIndex: number;
+  track: Track;
+  states: RiderState[];
+  lap: number;       // laps completed (0..RACE_LAPS)
+  rng: RNG;
 }
 
 function perLapCrashProb(risk: Risk, consistency: number, track: Track): number {
@@ -26,42 +34,56 @@ function compare(a: RiderState, b: RiderState, rng: RNG): number {
   return rng.nextFloat() - 0.5;
 }
 
-export function runRace(season: SeasonState, playerSetup: Setup, playerRisk: Risk, rng: RNG): { result: RaceResult; timeline: RaceTimeline } {
+export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG): RaceRun {
   if (season.currentRaceIndex >= season.calendar.length) throw new Error('All races have been simulated.');
   const track = season.calendar[season.currentRaceIndex];
-
   const states: RiderState[] = [season.playerRider, ...season.aiRiders].map((rider) => {
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
-    const risk = rider.isPlayer ? playerRisk : aiRisk(rider, rng);
+    const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng); // player risk comes live from stepLap
     const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
-    return { rider, setup, risk, basePace: weightedBase(axes, track) + PUSH_BONUS[risk], axes, progress: 0, crashed: false, crashLap: 0 };
+    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0 };
   });
+  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, rng };
+}
 
-  const laps: LapSnapshot[] = [];
-  for (let lap = 1; lap <= RACE_LAPS; lap++) {
-    for (const s of states) {
-      if (s.crashed) continue;
-      s.progress += s.basePace + rng.gaussian(0, LAP_NOISE_STD);
-      if (rng.nextFloat() < perLapCrashProb(s.risk, s.rider.skills.consistency, track)) {
-        s.crashed = true;
-        s.crashLap = lap;
-      }
+// Advance exactly one lap. The player uses `playerRisk` this lap; AI use their fixed race risk.
+export function stepLap(run: RaceRun, playerRisk: Risk): void {
+  run.lap += 1;
+  for (const s of run.states) {
+    if (s.crashed) continue;
+    const risk = s.rider.isPlayer ? playerRisk : s.aiRisk;
+    s.lastRisk = risk;
+    s.progress += s.basePace + PUSH_BONUS[risk] + run.rng.gaussian(0, LAP_NOISE_STD);
+    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track)) {
+      s.crashed = true;
+      s.crashLap = run.lap;
     }
-    laps.push({ lap, entries: states.map((s) => ({ riderId: s.rider.id, progress: s.progress, crashed: s.crashed })) });
   }
+}
 
-  const ordered = states.slice().sort((a, b) => compare(a, b, rng));
+export function finalizeRace(run: RaceRun, rng: RNG): RaceResult {
+  const ordered = run.states.slice().sort((a, b) => compare(a, b, rng));
   const finishingOrder: RaceEntry[] = ordered.map((s, i) => ({
     rider: s.rider,
     position: i + 1,
     pointsAwarded: i < POINTS_TABLE.length ? POINTS_TABLE[i] : 0,
     setup: s.setup,
-    risk: s.risk,
+    risk: s.lastRisk,
     crashed: s.crashed,
     performanceScore: s.progress,
   }));
+  return { raceIndex: run.raceIndex, track: run.track, finishingOrder };
+}
 
-  return { result: { raceIndex: season.currentRaceIndex, track, finishingOrder }, timeline: { laps, totalLaps: RACE_LAPS } };
+// Non-interactive convenience: the player holds `playerRisk` for every lap.
+export function runRace(season: SeasonState, playerSetup: Setup, playerRisk: Risk, rng: RNG): { result: RaceResult; timeline: RaceTimeline } {
+  const run = createRace(season, playerSetup, rng);
+  const laps: LapSnapshot[] = [];
+  for (let i = 0; i < RACE_LAPS; i++) {
+    stepLap(run, playerRisk);
+    laps.push({ lap: run.lap, entries: run.states.map((s) => ({ riderId: s.rider.id, progress: s.progress, crashed: s.crashed })) });
+  }
+  return { result: finalizeRace(run, rng), timeline: { laps, totalLaps: RACE_LAPS } };
 }
 
 export function simulateRace(season: SeasonState, playerSetup: Setup, playerRisk: Risk, rng: RNG): RaceResult {

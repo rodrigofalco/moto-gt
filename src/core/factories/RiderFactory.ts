@@ -8,13 +8,13 @@ function emptyCounts(): number[] { return new Array(10).fill(0); }
 
 export function createPlayerRider(team: string, pilot: PilotArchetype, brand: Brand): Rider {
   return {
-    id: 'player', name: pilot.name, team, isPlayer: true,
+    id: 'player', name: pilot.name, team, isPlayer: true, brandId: brand.id,
     skills: { ...pilot.skills }, bike: { ...brand.params },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: emptyCounts(),
   };
 }
 
-export function generateAIRiders(playerPilotId: string, playerBrandId: string, rng: RNG): Rider[] {
+export function generateAIRiders(playerPilotId: string, _playerBrandId: string, rng: RNG): Rider[] {
   const pilots = PILOT_ROSTER.filter((p) => p.id !== playerPilotId);
   const brands = BRAND_ROSTER.slice();
   const riders: Rider[] = [];
@@ -26,8 +26,9 @@ export function generateAIRiders(playerPilotId: string, playerBrandId: string, r
       name: i < pilots.length ? pilot.name : `${pilot.name} ${Math.floor(i / pilots.length) + 1}`,
       team: brand.name,
       isPlayer: false,
+      brandId: brand.id,
       skills: { ...pilot.skills },
-      bike: brand.id === playerBrandId ? { ...brand.params } : { ...brand.params },
+      bike: { ...brand.params },
       pilotXp: 0, rndPoints: 0, points: 0, positionCounts: emptyCounts(),
     });
   }

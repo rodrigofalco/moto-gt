@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { runRace, simulateRace } from '../src/core/RaceEngine';
+import { runRace, simulateRace, createRace, stepLap, finalizeRace } from '../src/core/RaceEngine';
 import { RNG } from '../src/core/RNG';
 import { RACE_LAPS } from '../src/core/constants';
 import type { Rider, Track, SeasonState } from '../src/core/types';
 
 function mkRider(id: string, isPlayer: boolean, pace: number): Rider {
   return {
-    id, name: id, team: 'T', isPlayer,
+    id, name: id, team: 'T', isPlayer, brandId: 'titan',
     skills: { pace, cornering: 5, consistency: 5 },
     bike: { speed: pace, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
@@ -56,5 +56,14 @@ describe('RaceEngine', () => {
   it('simulateRace returns just the result', () => {
     const r = simulateRace(mkSeason(), 'handling', 'low', new RNG(3));
     expect(r.finishingOrder).toHaveLength(10);
+  });
+
+  it('runRace equals manual create+step+finalize with the same seed and constant order', () => {
+    const viaRun = runRace(mkSeason(), 'topSpeed', 'high', new RNG(5));
+    const rng = new RNG(5);
+    const run = createRace(mkSeason(), 'topSpeed', rng);
+    for (let i = 0; i < RACE_LAPS; i++) stepLap(run, 'high');
+    const manual = finalizeRace(run, rng);
+    expect(manual.finishingOrder.map((f) => f.rider.id)).toEqual(viaRun.result.finishingOrder.map((f) => f.rider.id));
   });
 });

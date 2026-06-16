@@ -47,4 +47,13 @@ export const RACE_LAPS = 14;
 // Phase A's signal-to-noise ratio the per-lap noise must be NOISE_STD_DEV·√N, not /√N.
 // Tuned around that value to restore co-equal ~25–45% win rates with the lap engine.
 export const LAP_NOISE_STD = NOISE_STD_DEV * Math.sqrt(RACE_LAPS); // ≈ 3.74
-export const RACE_ANIM_SECONDS = 18;
+export const RACE_ANIM_SECONDS = 30;          // base 1× duration; speed control scales it
+export const RACE_SPEEDS: readonly number[] = [0.5, 1, 2];
+
+// Race-day dot colors by bike brand id.
+export const BRAND_COLORS: Record<string, number> = {
+  velocita: 0xe94560, // red
+  apex: 0x4fc3f7,     // blue
+  titan: 0xcfd8dc,    // silver
+  vortex: 0xff9800,   // orange
+};

@@ -15,6 +15,7 @@ export interface Rider {
   name: string;
   team: string;
   isPlayer: boolean;
+  brandId: string;           // bike brand (drives race-day dot color)
   skills: PilotSkills;       // evolves automatically (pilot XP)
   bike: BikeParams;          // evolves via R&D investment
   pilotXp: number;           // accumulated XP toward auto level-ups
