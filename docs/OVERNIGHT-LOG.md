@@ -21,8 +21,8 @@
 5. [x] **Race-day: overtake flash** — ▲/▼ Pn→Pm when the player changes place.
 6. [ ] **Race-day: anti-overlap nudge** — deferred (grid-offset + EMA already keep packs legible; risk of jitter, low priority).
 7. [x] **Result screen: standings movement arrows** (▲▼—) vs previous race.
-8. [ ] **Season-end: podium visual** (top 3).
-9. [ ] **Race-day: legend/help** (orders, brand colors).
+8. [x] **Season-end: podium visual** (top 3) — done, medal blocks + brand dots.
+9. [x] **Race-day: legend/help** — done (orders, bike colors, ring meanings).
 10. [ ] **Balance experiment (bold):** try a variant if the sweep shows a dominant/weak build; measure; keep only if it improves spread, else document and revert.
 11. [ ] **Bundle code-split** (Phaser chunk-size warning) if time permits.
 
@@ -53,3 +53,11 @@ Best combo:  Hotshot + Vortex 51%   |   Worst:  Metronome + Apex 21%
 - **Finish line** — checkered start/finish bar on the track. ✓ browser-verified.
 - **Overtake flash** — ▲/▼ Pn→Pm on place change (fades out). ✓ browser-verified (saw ▼P6→P7).
 - **Movement arrows** — ▲▼— on result-screen standings vs the order before the race. ✓ browser-verified.
+- **Season-end podium** — gold/silver/bronze blocks (1st centre tallest) with brand dots, names, points + full final standings. ✓ browser-verified (full 6-race season).
+- **Race legend** — on-screen help: order meanings, bike color key, ring meanings. ✓ browser-verified.
+
+### Next: item 10 (bold balance experiment — steepen consistency)
+Plan: lower `CONSISTENCY_DIVISOR` (15→~9) and `CONSISTENCY_FLOOR` (0.35→~0.15) so high-consistency
+pilots crash much less and low-consistency much more → consistency stops being a trap stat (F1).
+Measure: `npx vitest run sweep` (pilot spread should tighten, Metronome up / Hotshot down) AND keep
+`npx vitest run balance` green (re-tune LAP_NOISE_STD if it drifts). Revert if co-equality/feel regresses.
