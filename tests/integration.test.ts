@@ -35,6 +35,20 @@ describe('full season integration', () => {
     expect(total).toBe(101 * SEASON_RACE_COUNT);
   });
 
+  it('runRace yields a timeline whose final leader matches the race winner', async () => {
+    const { runRace } = await import('../src/core/RaceEngine');
+    const rng = new RNG(2026);
+    const season = createSeason('Me', PILOT_ROSTER[0], BRAND_ROSTER[0], rng);
+    const { result, timeline } = runRace(season, 'topSpeed', 'high', rng);
+    expect(timeline.laps).toHaveLength(timeline.totalLaps);
+    const last = timeline.laps[timeline.laps.length - 1].entries;
+    const finishers = last.filter((e) => !e.crashed);
+    if (finishers.length > 0) {
+      const leaderId = finishers.slice().sort((a, b) => b.progress - a.progress)[0].riderId;
+      expect(result.finishingOrder[0].rider.id).toBe(leaderId);
+    }
+  });
+
   it('throws if simulating past the calendar', () => {
     const rng = new RNG(1);
     const season = createSeason('Me', PILOT_ROSTER[0], BRAND_ROSTER[0], rng);
