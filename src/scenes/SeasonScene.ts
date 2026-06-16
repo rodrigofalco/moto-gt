@@ -25,6 +25,11 @@ export class SeasonScene extends Phaser.Scene {
     const track = this.season.calendar[idx];
     this.add.text(40, 24, `Race ${idx + 1} of ${this.season.calendar.length} — ${track.name}`, { fontSize: '24px', color: '#f5c518' });
     this.add.text(40, 60, `Track focus   Speed ${track.weights.speed.toFixed(2)}   Cornering ${track.weights.cornering.toFixed(2)}   Accel ${track.weights.acceleration.toFixed(2)}`, { fontSize: '15px', color: '#94a3b8' });
+    const w = track.weights;
+    const hint = w.speed >= w.cornering && w.speed >= w.acceleration ? 'Power track → Top Speed setup favored'
+      : w.cornering >= w.acceleration ? 'Technical track → Handling setup favored'
+      : 'Stop-go track → Acceleration setup favored';
+    this.add.text(40, 84, hint, { fontSize: '15px', color: '#00e5ff' });
 
     const s = this.season.playerRider.skills;
     this.add.text(40, 108, `Pilot   Pace ${s.pace}   Cornering ${s.cornering}   Consistency ${s.consistency}`, { fontSize: '16px', color: '#e0e0e0' });
