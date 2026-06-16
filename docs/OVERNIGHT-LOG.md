@@ -24,7 +24,12 @@
 8. [x] **Season-end: podium visual** (top 3) — done, medal blocks + brand dots.
 9. [x] **Race-day: legend/help** — done (orders, bike colors, ring meanings).
 10. [x] **Balance experiment (bold):** consistency steepened — KEPT (see F2).
-11. [ ] **Bundle code-split** (Phaser chunk-size warning) if time permits.
+11. [x] **Bundle code-split** — true split unsupported by rolldown-vite; lifted the cosmetic warning instead.
+
+## Second wave (planned backlog done; bonus value while time remains)
+12. [ ] **Race-day lap-1 grid spacing** — dots line up cleanly at the start (cleaner than current bunch).
+13. [ ] **Hub track-reading hint** — show the track's dominant axis + suggested setup, to help the setup call.
+14. [ ] (only if clearly safe) one more measured balance refinement OR result-screen polish.
 
 ## Findings & decisions for review
 
@@ -71,3 +76,9 @@ crash much less / low-consistency much more.
 Verdict: kept — consistency is now a meaningful stat without breaking co-equality. **Note for you:**
 crash frequency dropped (6.4%); if you want more race-day drama, nudge `BASE_CRASH` up ~1.4× (would
 restore ~9–10% crashes while keeping the steeper consistency curve). Left as a tunable, not applied.
+
+### F3 — Brand experiment (Vortex undiluted-accel): KEPT ✅
+`Vortex 6/6/9 → 6/7/8`. Brand win-rate spread tightened **12.1pt → 7.1pt** (Vortex 44%→40%; others
+33–37%). Addresses F1's "accel/Vortex strongest". Formal harness still green. The deeper structural
+cause (accel axis is bike-only / undiluted) remains — proposal **P1** (blend accel with pilot pace)
+is still the model-level fix, left for your decision.
