@@ -9,12 +9,12 @@ import { TARGET_BUILD_RATE, MAX_BUILD_RATE_SPREAD } from '../src/core/constants'
 import type { PilotArchetype, Brand, Track, Risk, Setup, BikeParams } from '../src/core/types';
 
 const PACE: { pilot: PilotArchetype; brand: Brand } = {
-  pilot: { id: 'p', name: 'Pace', nickname: '', skills: { pace: 9, cornering: 5, consistency: 6 } },
+  pilot: { id: 'p', name: 'Pace', nickname: '', skills: { pace: 8, cornering: 5, consistency: 6 } },
   brand: { id: 'velocita', name: 'Velocita', params: { speed: 9, handling: 6, acceleration: 6 } },
 };
 const CORNER: { pilot: PilotArchetype; brand: Brand } = {
   pilot: { id: 'c', name: 'Corner', nickname: '', skills: { pace: 5, cornering: 9, consistency: 6 } },
-  brand: { id: 'apex', name: 'Apex', params: { speed: 6, handling: 9, acceleration: 6 } },
+  brand: { id: 'apex', name: 'Apex', params: { speed: 6, handling: 9, acceleration: 9 } },
 };
 const BAL: { pilot: PilotArchetype; brand: Brand } = {
   pilot: { id: 'b', name: 'Bal', nickname: '', skills: { pace: 7, cornering: 7, consistency: 6 } },

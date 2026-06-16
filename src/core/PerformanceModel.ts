@@ -7,7 +7,7 @@ export function baseAxes(skills: PilotSkills, bike: BikeParams): Axes {
   return {
     speed: (skills.pace + bike.speed) / 2,
     cornering: (skills.cornering + bike.handling) / 2,
-    acceleration: bike.acceleration,
+    acceleration: (skills.pace + bike.acceleration) / 2,
   };
 }
 
