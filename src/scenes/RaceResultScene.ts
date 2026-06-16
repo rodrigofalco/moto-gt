@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
 import { getStandings, getChampion } from '../core/Championship';
-import type { SeasonState, RaceResult } from '../core/types';
+import { BRAND_COLORS } from '../core/constants';
+import type { SeasonState, RaceResult, Rider } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
 const SETUP_SHORT: Record<string, string> = { topSpeed: 'TS', handling: 'HN', acceleration: 'AC' };
@@ -60,12 +61,37 @@ export class RaceResultScene extends Phaser.Scene {
   private renderSeasonEnd(): void {
     const standings = getStandings(this.season);
     const champ = getChampion(this.season);
-    this.add.text(512, 70, 'SEASON COMPLETE', { fontSize: '40px', color: '#f5c518' }).setOrigin(0.5);
-    this.add.text(512, 130, `Champion: ${champ.name} (${champ.team}) — ${champ.points} pts`, { fontSize: '22px', color: '#ffffff' }).setOrigin(0.5);
     const pos = standings.findIndex((r) => r.isPlayer) + 1;
     const p = this.season.playerRider;
-    this.add.text(512, 175, `You finished P${pos} — ${p.points} pts | Wins ${p.positionCounts[0]} | Podiums ${p.positionCounts[0] + p.positionCounts[1] + p.positionCounts[2]}`, { fontSize: '17px', color: '#e0e0e0' }).setOrigin(0.5);
-    renderStandings(this, 380, 230, standings);
-    new Button(this, { x: 512, y: 700, width: 280, height: 56, label: 'PLAY AGAIN', onClick: () => this.scene.start('MainMenuScene') });
+    this.add.text(512, 44, 'SEASON COMPLETE', { fontSize: '38px', color: '#f5c518' }).setOrigin(0.5);
+    this.add.text(512, 90, `Champion: ${champ.name} — ${champ.points} pts`, { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
+    this.add.text(512, 118, `You finished P${pos} — ${p.points} pts | Wins ${p.positionCounts[0]} | Podiums ${p.positionCounts[0] + p.positionCounts[1] + p.positionCounts[2]}`, { fontSize: '15px', color: '#e0e0e0' }).setOrigin(0.5);
+
+    this.drawPodium(standings);
+
+    this.add.text(512, 372, 'Final Standings', { fontSize: '18px', color: '#f5c518' }).setOrigin(0.5);
+    renderStandings(this, 400, 398, standings);
+    new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'PLAY AGAIN', onClick: () => this.scene.start('MainMenuScene') });
+  }
+
+  // Top-3 podium: 1st tallest (centre), 2nd left, 3rd right; medal-colored blocks with
+  // each rider's name + brand-colored marker above.
+  private drawPodium(standings: Rider[]): void {
+    const blocks = [
+      { rider: standings[1], x: 392, h: 78, color: 0xc0c8d0, place: 2 },
+      { rider: standings[0], x: 512, h: 112, color: 0xf5c518, place: 1 },
+      { rider: standings[2], x: 632, h: 54, color: 0xcd7f32, place: 3 },
+    ];
+    const baseY = 344, w = 110;
+    for (const b of blocks) {
+      if (!b.rider) continue;
+      const top = baseY - b.h;
+      this.add.rectangle(b.x, baseY - b.h / 2, w, b.h, b.color).setStrokeStyle(2, 0x1a1a2e);
+      this.add.text(b.x, baseY - b.h / 2, String(b.place), { fontSize: '26px', color: '#0b0b14', fontStyle: 'bold' }).setOrigin(0.5);
+      this.add.circle(b.x - 52, top - 30, 6, BRAND_COLORS[b.rider.brandId] ?? 0x4fc3f7);
+      const you = b.rider.isPlayer ? ' (YOU)' : '';
+      this.add.text(b.x, top - 30, `${b.rider.name}${you}`, { fontSize: '13px', color: b.rider.isPlayer ? '#f5c518' : '#e0e0e0' }).setOrigin(0.5);
+      this.add.text(b.x, top - 14, `${b.rider.points} pts`, { fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
+    }
   }
 }
