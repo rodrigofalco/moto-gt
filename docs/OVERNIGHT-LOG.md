@@ -23,7 +23,7 @@
 7. [x] **Result screen: standings movement arrows** (▲▼—) vs previous race.
 8. [x] **Season-end: podium visual** (top 3) — done, medal blocks + brand dots.
 9. [x] **Race-day: legend/help** — done (orders, bike colors, ring meanings).
-10. [ ] **Balance experiment (bold):** try a variant if the sweep shows a dominant/weak build; measure; keep only if it improves spread, else document and revert.
+10. [x] **Balance experiment (bold):** consistency steepened — KEPT (see F2).
 11. [ ] **Bundle code-split** (Phaser chunk-size warning) if time permits.
 
 ## Findings & decisions for review
@@ -56,8 +56,18 @@ Best combo:  Hotshot + Vortex 51%   |   Worst:  Metronome + Apex 21%
 - **Season-end podium** — gold/silver/bronze blocks (1st centre tallest) with brand dots, names, points + full final standings. ✓ browser-verified (full 6-race season).
 - **Race legend** — on-screen help: order meanings, bike color key, ring meanings. ✓ browser-verified.
 
-### Next: item 10 (bold balance experiment — steepen consistency)
-Plan: lower `CONSISTENCY_DIVISOR` (15→~9) and `CONSISTENCY_FLOOR` (0.35→~0.15) so high-consistency
-pilots crash much less and low-consistency much more → consistency stops being a trap stat (F1).
-Measure: `npx vitest run sweep` (pilot spread should tighten, Metronome up / Hotshot down) AND keep
-`npx vitest run balance` green (re-tune LAP_NOISE_STD if it drifts). Revert if co-equality/feel regresses.
+### F2 — Consistency experiment (item 10): KEPT ✅
+Changed `CONSISTENCY_DIVISOR` 15→9 and `CONSISTENCY_FLOOR` 0.35→0.15 so high-consistency pilots
+crash much less / low-consistency much more.
+
+| Metric | Before | After |
+|---|---|---|
+| Pilot win-rate spread | 20.3pt (Hotshot 46% / Metronome 26%) | **17.5pt** (Smooth Op 46% / Metronome 29%) |
+| Hotshot (c3, fragile) | 46.3% runaway best | 41.2% (now 2nd) |
+| Metronome (c9, steady) | 26.0% worst | 28.7% (off the bottom) |
+| Formal co-equal builds | 30.6/26.8/29.4 ✓ | 31.7/28.0/30.4 ✓ |
+| Player crash rate | 10.7% | 6.4% (still in 3–30% band) |
+
+Verdict: kept — consistency is now a meaningful stat without breaking co-equality. **Note for you:**
+crash frequency dropped (6.4%); if you want more race-day drama, nudge `BASE_CRASH` up ~1.4× (would
+restore ~9–10% crashes while keeping the steeper consistency curve). Left as a tunable, not applied.
