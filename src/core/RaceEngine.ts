@@ -1,5 +1,5 @@
 import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD } from './constants';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
@@ -9,6 +9,7 @@ export interface RiderState {
   rider: Rider; setup: Setup; aiRisk: Risk; lastRisk: Risk;
   basePace: number; axes: Axes;            // basePace excludes push (push is applied per lap by risk)
   progress: number; crashed: boolean; crashLap: number;
+  lastNoise: number;                       // AR(1) state: last lap's applied noise (0 before lap 1)
 }
 
 export interface RaceRun {
@@ -41,9 +42,15 @@ export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG): R
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
     const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng); // player risk comes live from stepLap
     const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
-    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0 };
+    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0, lastNoise: 0 };
   });
   return { raceIndex: season.currentRaceIndex, track, states, lap: 0, rng };
+}
+
+// AR(1) momentum: blend carryover with fresh noise. Variance-preserving for the per-lap
+// marginal; positive autocorrelation lifts race-total variance back toward the old level.
+export function momentumNoise(lastNoise: number, fresh: number): number {
+  return MOMENTUM_WEIGHT * lastNoise + Math.sqrt(1 - MOMENTUM_WEIGHT * MOMENTUM_WEIGHT) * fresh;
 }
 
 // Advance exactly one lap. The player uses `playerRisk` this lap; AI use their fixed race risk.
@@ -53,7 +60,8 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
     if (s.crashed) continue;
     const risk = s.rider.isPlayer ? playerRisk : s.aiRisk;
     s.lastRisk = risk;
-    s.progress += s.basePace + PUSH_BONUS[risk] + run.rng.gaussian(0, LAP_NOISE_STD);
+    s.lastNoise = momentumNoise(s.lastNoise, run.rng.gaussian(0, LAP_NOISE_STD));
+    s.progress += s.basePace + PUSH_BONUS[risk] + s.lastNoise;
     if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track)) {
       s.crashed = true;
       s.crashLap = run.lap;

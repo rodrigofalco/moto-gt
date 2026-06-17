@@ -40,10 +40,13 @@ export const MAX_BUILD_RATE_SPREAD = 0.15;
 
 // Race-day (Phase B)
 export const RACE_LAPS = 8;
-// basePace accumulates over N laps (×N) while noise grows only ×√N, so to preserve
-// Phase A's signal-to-noise ratio the per-lap noise must be NOISE_STD_DEV·√N, not /√N.
-// (Co-equal balance is invariant to RACE_LAPS given this; fewer laps also = smoother motion.)
-export const LAP_NOISE_STD = NOISE_STD_DEV * Math.sqrt(RACE_LAPS); // ≈ 2.83
+// Per-lap noise is kept low for smooth lap-to-lap motion. Race-total variance — and
+// therefore build balance — is preserved by the AR(1) momentum process in
+// RaceEngine.stepLap (see docs/superpowers/specs/2026-06-16-race-stability-improvements.md).
+export const LAP_NOISE_STD = 1.5;
+export const MOMENTUM_WEIGHT = 0.6;   // AR(1): fraction of last lap's noise carried into this lap
+export const DRAFT_RANGE = 2.0;       // progress-points: a trailing rider within this of someone ahead gets a tow
+export const DRAFT_BONUS = 0.3;       // progress-points/lap tow for a rider with a non-crashed rider close ahead
 export const RACE_ANIM_SECONDS = 80;          // 1× ≈ 10s/lap; speed control scales it
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
