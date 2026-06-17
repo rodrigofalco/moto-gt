@@ -24,8 +24,11 @@ tiny, self-contained items sized for a less-capable local coding agent.
 4. **Numbers stay 1–10.** Pilot skills and bike params remain integers 1–10 so the balance
    harness (`tests/balance.test.ts`, `tests/sweep.test.ts`) stays valid. We fix "stats max out
    too fast" with *economy/curve* changes, NOT by rescaling stats. (See §5.)
-5. **Determinism via `RNG`.** Never call `Math.random()` in `core/`. Thread the seeded `RNG`
-   (`src/core/RNG.ts`) through everything so tests are reproducible.
+5. **Determinism via `RNG`.** No `Math.random()` in deterministic simulation/gameplay core
+   modules (race outcomes, progression, economy, off-season churn): thread the seeded `RNG`
+   (`src/core/RNG.ts`) through everything so tests are reproducible. **Exception:**
+   `src/core/SoundEngine.ts` uses `Math.random()` for audio noise — that is not simulation and is
+   left as-is. (SoundEngine lives in `core/` for convenience but is presentation, not sim.)
 6. **Every change is validated** — see §7. No item is "done" without evidence.
 
 ## 3. Current architecture (what exists today)
@@ -57,6 +60,12 @@ tiny, self-contained items sized for a less-capable local coding agent.
 - **Continue/New/Abandon** on the main menu. A career survives page reload.
 - **Multiple seasons:** when a `SeasonState` completes, instead of "PLAY AGAIN → MainMenu", go to
   an **Off-Season screen** then start the next season carrying everything forward.
+- **Per-season reset (critical):** persistent riders are reused across seasons, so building a new
+  season MUST reset their per-season championship fields — `points = 0`,
+  `positionCounts = new Array(10).fill(0)`, and the season's `raceResults`/`currentRaceIndex`/
+  `isSeasonComplete`. Long-term fields (`skills`, `bike`, `pilotXp`, `rndPoints`, `age`, `form`,
+  `rivalId`) and career-level `money`/`reputation`/`tierId` are preserved. This lives in
+  `createSeasonForCareer` and is covered by a dedicated test (plan P1.10).
 - **Off-season churn (`OffSeason.ts`):** AI riders age, improve or decline, the weakest retire,
   new rookies are generated, so the grid is never identical and never trivially beaten.
 - **Tiers / promotion:** 3 classes (e.g. Rookie → Pro → Factory). Win or finish top-N in the
@@ -69,7 +78,9 @@ tiny, self-contained items sized for a less-capable local coding agent.
 Each is a small, self-contained system that defaults to "neutral" so the quick loop still works:
 **qualifying** (sets the grid instead of grid = roster order), **tyre choice + wear**, **simple
 weather** (dry/wet flips which setup wins, raises crash risk), a named **rivalry/nemesis**,
-**pilot form/morale**, and **mid-race flags/events**.
+**pilot form/morale**, and **mid-race flags/events**. Note: each depth system needs both a *logic*
+task and a *wiring* task — e.g. qualifying isn't done until it actually runs before the race, shows
+the grid, and feeds it into `createRace` (plan P3.1 logic → P3.2 grid support → P3.2b wiring).
 
 ### Pillar D — Visual juice & game-feel
 Race day: motion trails, overtake pop, crash particle burst, leader glow, a real track-map path

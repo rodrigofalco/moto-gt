@@ -13,8 +13,13 @@ gives you the context you need, and tells you how to prove it works.
    season. The universal gate is: `npm run build` passes (no TypeScript errors).
 2. **Pure logic goes in `src/core/` and never imports Phaser.** Only `src/scenes/` and `src/ui/`
    import Phaser. If you can test it with plain inputs/outputs, it belongs in `core/`.
-3. **Never call `Math.random()` inside `src/core/`.** Use the seeded RNG (`src/core/RNG.ts`),
-   threaded through function arguments, so tests are deterministic.
+3. **No `Math.random()` in deterministic simulation/gameplay core modules.** Anything that
+   affects race outcomes, progression, economy, or off-season churn must use the seeded RNG
+   (`src/core/RNG.ts`), threaded through function arguments, so tests are deterministic. This
+   covers `RaceEngine`, `PerformanceModel`, `CrashModel`, `AIDecision`, `Progression`, `OffSeason`,
+   `Qualifying`, `Tyres`, `Form`, `Rivalry`, `CostCurve`, `Economy`, and the factories.
+   **Exempt:** `src/core/SoundEngine.ts` — its `Math.random()` is audio noise, never simulation.
+   Do NOT change SoundEngine's noise generation.
 4. **Keep all pilot skills and bike params as integers 1–10.** We fix balance with cost curves,
    not by rescaling. Do **not** edit `tests/balance.test.ts` to make something pass.
 5. **New optional fields** on existing types must be optional (`field?: T`) or defaulted, so old
@@ -47,12 +52,23 @@ gives you the context you need, and tells you how to prove it works.
 **Goal:** Lock the in-progress audio + race-day scene changes so we build on a known-good commit.
 **Files:** none (git only).
 **Context:** The working tree has modified `src/main.ts`, `src/scenes/RaceScene.ts`,
-`RaceResultScene.ts`, `SeasonScene.ts` and a new `src/core/SoundEngine.ts`.
-**Steps:** Run `npm run build` and `npm test`; if green, `git add -A && git commit -m
-"chore: baseline race-day audio + scenes before rework (P0.1)"`. If red, fix the smallest thing
-that makes them green first, then commit.
-**Validate:** BUILD + TEST green; `git status` clean.
-**Done when:** working tree is clean and committed.
+`RaceResultScene.ts`, `SeasonScene.ts` and a new `src/core/SoundEngine.ts`. It ALSO has
+local/generated artifacts that must NOT be committed: `.opencode/`, `.playwright-mcp/`, and probe
+PNGs (e.g. `/tmp/*.png` or any `*.png` written into the repo).
+**Steps:**
+1. Run `npm run build` and `npm test`. If red, fix the smallest thing that makes them green first.
+2. **Stage only the intended baseline source files — do NOT use `git add -A`:**
+   ```
+   git add src/main.ts src/scenes/RaceScene.ts src/scenes/RaceResultScene.ts \
+           src/scenes/SeasonScene.ts src/core/SoundEngine.ts
+   ```
+3. Commit: `git commit -m "chore: baseline race-day audio + scenes before rework (P0.1)"`.
+4. Leave generated artifacts uncommitted. As a separate, optional follow-up commit, add them to
+   `.gitignore` (e.g. lines `.opencode/`, `.playwright-mcp/`, `*.png`) — do this in its own commit,
+   not mixed with the source baseline.
+**Validate:** BUILD + TEST green; `git status` shows the 5 source files committed and the
+generated artifacts still untracked (never staged).
+**Done when:** the 5 baseline source files are committed and no generated artifact was added.
 
 ### P0.2 — Characterization test: a whole season plays start→finish
 **Goal:** A safety net so later refactors can't silently break the season loop.
@@ -171,6 +187,17 @@ with `{ season }`. We now want the season to live inside a `CareerState`.
 first `SeasonState` from the career (add `SeasonFactory.createSeasonForCareer(career, rng)` that
 builds the calendar and wires `career.player` + `career.field` as the riders), set
 `career.season`, `saveCareer(career)`, and start `SeasonScene` with `{ career }`.
+**IMPORTANT — per-season reset (used every season, critical from season 2 on):**
+`createSeasonForCareer` reuses the *persistent* riders (`career.player`, `career.field`), so it
+MUST reset their per-season championship fields before the season starts, or points/positions
+carry over and standings break. For every rider it builds into the season:
+- reset `points = 0` and `positionCounts = new Array(10).fill(0)`;
+- reset any per-season race fields (e.g. clear `season.raceResults = []`, `currentRaceIndex = 0`,
+  `isSeasonComplete = false`).
+It must **preserve** long-term fields: `skills`, `bike`, `pilotXp`, `rndPoints`, `age`, `form`,
+`rivalId`, and career-level `money`/`reputation`/`tierId` (those live on `CareerState`, not the
+season). For season 1 the riders are fresh so the reset is a no-op; the test in P1.10 proves it
+works for season 2.
 **Validate:** SCREENSHOT (play into the hub) `/tmp/career-start.png`; BUILD passes;
 `localStorage` has a career after starting (log it in the probe).
 **Done when:** a new career is persisted and the hub loads from it.
@@ -225,6 +252,20 @@ next tier and `report.promoted = true`. (AI bonus is *applied* when generating t
 P2.8/P3 — for now just set the tier.) Test: a top-3 finish promotes; a P8 finish does not.
 **Validate:** TEST green; BUILD passes.
 **Done when:** promotion logic is tested.
+
+### P1.10 — Multi-season reset test
+**Goal:** Prove season 2 starts clean but keeps long-term progress.
+**Files:** `tests/seasonReset.test.ts` (new); depends on P1.5 (`createSeasonForCareer`).
+**Context:** `createSeasonForCareer(career, rng)` reuses persistent riders and must reset
+per-season championship fields while preserving long-term ones (see P1.5 "per-season reset").
+**Steps:** Build a career, run season 1 to completion (award some points and bump a stat — e.g.
+set `career.player.points = 80`, `career.player.skills.pace += 1`, give `rndPoints`), then call
+`runOffSeason` (clears `career.season`) and `createSeasonForCareer` for season 2. Assert on the
+season-2 riders: `points === 0` and `positionCounts` is all zeros, season `currentRaceIndex === 0`,
+`raceResults.length === 0`, `isSeasonComplete === false`. Assert preserved: the upgraded
+`skills.pace`, `bike`, `pilotXp`/`rndPoints`, and that `career.money`/`tierId` are untouched.
+**Validate:** TEST green.
+**Done when:** the test passes and fails if the reset is removed.
 
 ---
 
@@ -367,6 +408,25 @@ grid visually; here we give a tiny mechanical head start.
 starts with more progress.
 **Validate:** TEST green; BUILD passes (callers still work without grid).
 **Done when:** grid offset works and is backward compatible.
+
+### P3.2b — Run qualifying and feed the grid into the race
+**Goal:** Actually use P3.1 + P3.2 — without this, qualifying logic is dead code.
+**Files:** `src/scenes/SeasonScene.ts` (run + display), `src/scenes/RaceScene.ts` /
+`SeasonScene.simulate()` (pass the grid), uses `Qualifying.runQualifying` (P3.1) and the
+`createRace(season, setup, rng, grid)` grid param (P3.2).
+**Context:** Today `SeasonScene.simulate()` does `createRace(this.season, this.setup, rng)` then
+starts `RaceScene`. The grid currently equals roster order (player first). We replace that with the
+qualifying result.
+**Steps:**
+1. In the hub flow (when the player commits to the race), call
+   `runQualifying([player, ...ai], track, setup, rng)` to get the grid order (riderId array).
+2. Store it on the run/season (e.g. pass alongside `run`) and **display it**: show a short
+   "Starting grid" list on the hub (or a brief grid panel) so the player sees where they start.
+3. Pass the grid into `createRace(season, setup, rng, grid)` so P3.2's offset applies, and make
+   the race-day numbered dots / start positions reflect the qualified order.
+**Validate:** SCREENSHOT `/tmp/qualifying.png` showing the starting grid (player not always P1);
+BUILD passes; TEST green.
+**Done when:** qualifying runs each race, the grid is shown, and `createRace` receives it.
 
 ### P3.3 — Weather generation
 **Goal:** Variety + strategy.
@@ -575,9 +635,15 @@ with stat bars.
 ### P5.4 — Post-race highlights
 **Goal:** Summarize what mattered.
 **Files:** `src/scenes/RaceResultScene.ts`.
-**Context:** You have: player position, crashes, pilot level-ups (`playerSummary.pilotLevels`),
-prize money, rival outcome, fastest lap.
-**Steps:** Add a "Highlights" box listing 2–4 bullet lines computed from the race (e.g.
+**Context:** Use only data that actually reaches the result screen: player finishing position and
+DNF (`result.finishingOrder`), pilot level-ups (`playerSummary.pilotLevels`), prize money (P2.6),
+and rival outcome (`Rivalry.beatRival`, P3.8). **Do NOT reference fastest lap here** — `RaceResult`
+does not store fastest-lap data (it's only tracked transiently inside `RaceScene` as `this.fastest`
+and discarded at `finalizeRace`). If you want fastest lap as a highlight later, that's a separate
+task: add a `fastestLap?: { riderId: string; time: number }` field to `RaceResult`, populate it in
+`RaceScene.finish()` before `applyRaceResult`, and only then surface it. That is out of scope for
+P5.4.
+**Steps:** Add a "Highlights" box listing 2–4 bullet lines computed from the in-scope data (e.g.
 "+1 Cornering", "Beat your rival", "Earned $2,500", "Nemesis DNF'd").
 **Validate:** SCREENSHOT `/tmp/highlights.png`; BUILD passes.
 **Done when:** the result screen shows contextual highlights.
@@ -632,7 +698,8 @@ keyboard shortcuts on race day: `1/2/3` = Settle/Defend/Attack, `Space` = cycle 
 - **Single test file:** `npx vitest run <name>`. **Balance sweep:** `npx vitest run sweep`.
 - **Screenshot probe template:** `tools/uiprobe.mjs` — copy, adapt the clicks, change the
   screenshot path, assert `PAGE ERRORS: none`.
-- **Determinism:** always pass `new RNG(seed)`; never `Math.random()` in `core/`.
+- **Determinism:** always pass `new RNG(seed)`; never `Math.random()` in deterministic
+  simulation/gameplay core modules (see hard rule #3). `SoundEngine` audio noise is exempt.
 - **Don't touch** `tests/balance.test.ts` thresholds. If balance breaks, your change is wrong.
 - **Each item = one commit.** If an item feels like it needs to touch 5+ files, stop and re-read
   it — you're probably overreaching; do the smallest version that satisfies "Done when".
