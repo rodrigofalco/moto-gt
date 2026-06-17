@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runRace, simulateRace, createRace, stepLap, finalizeRace } from '../src/core/RaceEngine';
+import { runRace, simulateRace, createRace, stepLap, finalizeRace, momentumNoise, hasDraftTow } from '../src/core/RaceEngine';
 import { RNG } from '../src/core/RNG';
 import { RACE_LAPS } from '../src/core/constants';
 import type { Rider, Track, SeasonState } from '../src/core/types';
@@ -65,5 +65,48 @@ describe('RaceEngine', () => {
     for (let i = 0; i < RACE_LAPS; i++) stepLap(run, 'high');
     const manual = finalizeRace(run, rng);
     expect(manual.finishingOrder.map((f) => f.rider.id)).toEqual(viaRun.result.finishingOrder.map((f) => f.rider.id));
+  });
+});
+
+describe('momentum noise (AR1)', () => {
+  it('is positively autocorrelated lap-to-lap', () => {
+    const rng = new RNG(7);
+    let last = 0;
+    const series: number[] = [];
+    for (let i = 0; i < 5000; i++) { last = momentumNoise(last, rng.gaussian(0, 1.5)); series.push(last); }
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
+    let num = 0, den = 0;
+    for (let i = 1; i < series.length; i++) num += (series[i] - mean) * (series[i - 1] - mean);
+    for (let i = 0; i < series.length; i++) den += (series[i] - mean) ** 2;
+    expect(num / den).toBeGreaterThan(0.4); // ~0.6 in expectation
+  });
+
+  it('preserves marginal variance in steady state (~input sigma)', () => {
+    const rng = new RNG(11);
+    let last = 0;
+    const xs: number[] = [];
+    for (let i = 0; i < 20000; i++) { last = momentumNoise(last, rng.gaussian(0, 1.5)); if (i > 50) xs.push(last); }
+    const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const variance = xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length;
+    expect(Math.sqrt(variance)).toBeGreaterThan(1.2);
+    expect(Math.sqrt(variance)).toBeLessThan(1.8);
+  });
+});
+
+describe('drafting tow (hasDraftTow)', () => {
+  it('tows a trailing rider within range but not an isolated leader or a far-back rider', () => {
+    const progress = [10, 9.5, 3];           // r0 leader, r1 0.5 behind, r2 7 behind
+    const crashed = [false, false, false];
+    expect(hasDraftTow(progress, crashed, 0)).toBe(false); // clear air ahead
+    expect(hasDraftTow(progress, crashed, 1)).toBe(true);  // within DRAFT_RANGE of r0
+    expect(hasDraftTow(progress, crashed, 2)).toBe(false); // out of range
+  });
+  it('gives no tow at exactly equal progress (strict ahead)', () => {
+    expect(hasDraftTow([5, 5], [false, false], 0)).toBe(false);
+    expect(hasDraftTow([5, 5], [false, false], 1)).toBe(false);
+  });
+  it('ignores crashed riders as tow providers and skips crashed receivers', () => {
+    expect(hasDraftTow([10, 9.5], [false, true], 1)).toBe(false); // only rider ahead is crashed
+    expect(hasDraftTow([9.5, 10], [true, false], 0)).toBe(false); // receiver crashed
   });
 });
