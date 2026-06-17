@@ -199,10 +199,10 @@ export class RaceScene extends Phaser.Scene {
       trueP.set(id, (this.prev.get(id) ?? 0) + ((this.cur.get(id) ?? 0) - (this.prev.get(id) ?? 0)) * frac);
     }
 
-    // Train layout: dots placed by real order/gaps so the field reads as the standings.
-    const live = states.filter((s) => !s.crashed);
-    const leaderP = live.length ? Math.max(...live.map((s) => trueP.get(s.rider.id)!)) : 0;
-    const anchor = (((leaderP / this.progressPerLoop) % 1) + 1) % 1;
+    // The pack circulates at a constant rate (one loop per lap) driven by the animation
+    // clock, NOT the leader's noisy lap pace — so motion is smooth. Real pace differences
+    // show up only in the relative spacing (placeBehind), not the circulation speed.
+    const anchor = (((this.lapsDone - 1 + frac) % 1) + 1) % 1;
     const gapScale = MAX_SPREAD / this.progressPerLoop;
     const entries: TrainEntry[] = states.map((s) => ({
       id: s.rider.id, progress: trueP.get(s.rider.id)!, crashed: s.crashed, grid: this.numbers.get(s.rider.id) ?? 1,
