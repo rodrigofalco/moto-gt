@@ -32,4 +32,9 @@ describe('factories', () => {
     expect(new Set(s.calendar.map((t) => t.id)).size).toBe(6);
     expect(s.currentRaceIndex).toBe(0);
   });
+
+  it('createSeason seeds lastRisk to medium', () => {
+    const s = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(2));
+    expect(s.lastRisk).toBe('medium');
+  });
 });

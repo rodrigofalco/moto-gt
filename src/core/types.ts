@@ -47,6 +47,7 @@ export interface SeasonState {
   currentRaceIndex: number;  // 0..6
   raceResults: RaceResult[];
   isSeasonComplete: boolean;
+  lastRisk?: Risk;           // player's last-used in-race order, carried between races
 }
 
 export interface LapSnapshot {
