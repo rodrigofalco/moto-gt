@@ -10,9 +10,10 @@ function mkRider(id: string, isPlayer: boolean, pace: number): Rider {
     skills: { pace, cornering: 5, consistency: 5 },
     bike: { speed: pace, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+    careerStats: { seasonsPlayed: 0, totalWins: 0, totalPodiums: 0, totalPoints: 0, bestChampionship: 99, lapsCompleted: 0 },
+   };
 }
-const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.5, cornering: 0.3, acceleration: 0.2 } };
+const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.5, cornering: 0.3, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
 function mkSeason(): SeasonState {
   return {
     playerRider: mkRider('player', true, 6),
@@ -23,7 +24,7 @@ function mkSeason(): SeasonState {
 
 describe('RaceEngine', () => {
   it('produces a valid result and a full timeline', () => {
-    const { result, timeline } = runRace(mkSeason(), 'topSpeed', 'medium', new RNG(1));
+    const { result, timeline } = runRace(mkSeason(), 'topSpeed', 'medium', 'medium', new RNG(1));
     expect(result.finishingOrder.map((f) => f.position).sort((a, b) => a - b))
       .toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(result.finishingOrder.reduce((s, f) => s + f.pointsAwarded, 0)).toBe(101);
@@ -32,8 +33,8 @@ describe('RaceEngine', () => {
   });
 
   it('is deterministic for a fixed seed', () => {
-    const a = runRace(mkSeason(), 'topSpeed', 'medium', new RNG(42));
-    const b = runRace(mkSeason(), 'topSpeed', 'medium', new RNG(42));
+    const a = runRace(mkSeason(), 'topSpeed', 'medium', 'medium', new RNG(42));
+    const b = runRace(mkSeason(), 'topSpeed', 'medium', 'medium', new RNG(42));
     expect(a.result.finishingOrder.map((f) => f.rider.id))
       .toEqual(b.result.finishingOrder.map((f) => f.rider.id));
     expect(a.timeline.laps[a.timeline.laps.length - 1].entries).toEqual(b.timeline.laps[b.timeline.laps.length - 1].entries);
@@ -42,10 +43,10 @@ describe('RaceEngine', () => {
   it('crashed riders finish behind all non-crashed riders', () => {
     const season = mkSeason();
     season.playerRider.skills.consistency = 1;
-    const technical: Track = { id: 'x', name: 'X', location: 'Y', weights: { speed: 0.1, cornering: 0.8, acceleration: 0.1 } };
+    const technical: Track = { id: 'x', name: 'X', location: 'Y', weights: { speed: 0.1, cornering: 0.8, acceleration: 0.1 }, weather: 'wet', wetGrip: 0.7 };
     season.calendar = [technical];
     for (let seed = 0; seed < 40; seed++) {
-      const { result } = runRace(season, 'handling', 'high', new RNG(seed));
+      const { result } = runRace(season, 'handling', 'medium', 'high', new RNG(seed));
       const order = result.finishingOrder;
       const firstCrashIdx = order.findIndex((e) => e.crashed);
       if (firstCrashIdx === -1) continue;
@@ -54,14 +55,14 @@ describe('RaceEngine', () => {
   });
 
   it('simulateRace returns just the result', () => {
-    const r = simulateRace(mkSeason(), 'handling', 'low', new RNG(3));
+    const r = simulateRace(mkSeason(), 'handling', 'medium', 'low', new RNG(3));
     expect(r.finishingOrder).toHaveLength(10);
   });
 
   it('runRace equals manual create+step+finalize with the same seed and constant order', () => {
-    const viaRun = runRace(mkSeason(), 'topSpeed', 'high', new RNG(5));
+    const viaRun = runRace(mkSeason(), 'topSpeed', 'medium', 'high', new RNG(5));
     const rng = new RNG(5);
-    const run = createRace(mkSeason(), 'topSpeed', rng);
+    const run = createRace(mkSeason(), 'topSpeed', 'medium', rng);
     for (let i = 0; i < RACE_LAPS; i++) stepLap(run, 'high');
     const manual = finalizeRace(run, rng);
     expect(manual.finishingOrder.map((f) => f.rider.id)).toEqual(viaRun.result.finishingOrder.map((f) => f.rider.id));

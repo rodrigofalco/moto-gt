@@ -30,7 +30,7 @@ function playSeason(pilot: PilotArchetype, brand: Brand, seed: number): boolean 
       const weakest = (['speed', 'handling', 'acceleration'] as (keyof BikeParams)[]).sort((a, b) => p.bike[a] - p.bike[b])[0];
       if (!investBikePoint(p, weakest)) break;
     }
-    const result = simulateRace(season, dominantSetup(track), policyRisk(track, p.skills.consistency), rng);
+     const result = simulateRace(season, dominantSetup(track), 'medium', policyRisk(track, p.skills.consistency), rng);
     applyProgression([p, ...season.aiRiders], result);
     applyRaceResult(season, result);
   }
@@ -63,6 +63,6 @@ describe('balance sweep', () => {
     const report = lines.join('\n');
     console.log('\n' + report);
     writeFileSync('/tmp/sweep-report.txt', report);
-    expect(rows.length).toBe(24);
+    expect(rows.length).toBe(72);
   });
 });

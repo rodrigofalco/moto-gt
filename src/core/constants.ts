@@ -1,4 +1,4 @@
-import type { Setup, Risk } from './types';
+import type { Setup, Risk, TireCompound } from './types';
 
 export const SEASON_RACE_COUNT = 6;
 export const GRID_SIZE = 10;
@@ -21,6 +21,14 @@ export const CONSISTENCY_FLOOR = 0.15;
 export const CRASH_TECH_FACTOR = 7.0;
 export const CRASH_TECH_THRESHOLD = 0.30;
 // (crash = DNF via finishing-order in RaceEngine; no score-penalty constant needed)
+
+// Weather modifiers
+export const WET_CRASH_MULT = 1.8;
+export const MIXED_CRASH_MULT = 1.3;
+export const WET_PACE_REDUCED = 0.85;
+export const MIXED_PACE_REDUCED = 0.95;
+export const WET_SETUP_BONUS_HANDLING = 2.0;  // handling setup is MORE valuable in wet
+export const WET_SETUP_PENALTY_SPEED = 0.6;   // speed setup is WORSE in wet
 
 export const SETUPS: readonly Setup[] = ['topSpeed', 'handling', 'acceleration'];
 export const RISKS: readonly Risk[] = ['low', 'medium', 'high'];
@@ -65,7 +73,16 @@ export const LAP_TIME_SPREAD = 0.25;          // how much pace variation shows i
 // Race-day dot colors by bike brand id.
 export const BRAND_COLORS: Record<string, number> = {
   velocita: 0xe94560, // red
-  apex: 0x4fc3f7,     // blue
-  titan: 0xcfd8dc,    // silver
-  vortex: 0xff9800,   // orange
+  apex: 0x4fc3f7,      // blue
+  titan: 0xcfd8dc,     // silver
+  vortex: 0xff9800,    // orange
 };
+
+// Tire compounds
+export const TIRE_COMPOUNDS: Record<TireCompound, { grip: number; durability: number; label: string; color: number }> = {
+  soft:   { grip: 1.15, durability: 3.0, label: 'Soft',  color: 0xff0000 },
+  medium: { grip: 1.05, durability: 5.0, label: 'Medium',color: 0xffffff },
+  hard:   { grip: 1.0,  durability: 8.0, label: 'Hard',  color: 0xffaa00 },
+};
+export const TIRE_WEAR_PER_LAP_BASE = 1.5;
+export const TIRE_COMPOUNDS_LIST: readonly TireCompound[] = ['soft', 'medium', 'hard'];

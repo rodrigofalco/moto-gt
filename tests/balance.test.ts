@@ -46,7 +46,7 @@ function playSeason(
         .sort((a, b) => p.bike[a] - p.bike[b])[0];
       if (!investBikePoint(p, weakest)) break;
     }
-    const result = simulateRace(season, setupFn(track), riskFn(track, p.skills.consistency), rng);
+    const result = simulateRace(season, setupFn(track), 'medium', riskFn(track, p.skills.consistency), rng);
     applyProgression([p, ...season.aiRiders], result);
     applyRaceResult(season, result);
   }
@@ -99,7 +99,7 @@ describe('balance harness', () => {
       const season = createSeason('Me', BAL.pilot, BAL.brand, rng);
       while (!season.isSeasonComplete) {
         const track = season.calendar[season.currentRaceIndex];
-        const result = simulateRace(season, dominantSetup(track), policyRisk(track, season.playerRider.skills.consistency), rng);
+        const result = simulateRace(season, dominantSetup(track), 'medium', policyRisk(track, season.playerRider.skills.consistency), rng);
         const me = result.finishingOrder.find((e) => e.rider.isPlayer)!;
         races++; if (me.crashed) crashes++;
         applyProgression([season.playerRider, ...season.aiRiders], result);

@@ -4,22 +4,27 @@ import { renderStandings } from '../ui/StandingsTable';
 import { createRace } from '../core/RaceEngine';
 import { getStandings } from '../core/Championship';
 import { investBikePoint } from '../core/Progression';
+import { SaveSystem } from '../core/SaveSystem';
+import { SoundEngine } from '../core/SoundEngine';
 import { RNG } from '../core/RNG';
-import { SETUPS } from '../core/constants';
+import { SETUPS, TIRE_COMPOUNDS, TIRE_COMPOUNDS_LIST } from '../core/constants';
 import { recommendedSetup } from '../core/Advice';
-import type { SeasonState, Setup, BikeParams } from '../core/types';
+import type { SeasonState, Setup, BikeParams, TireCompound } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
+const WEATHER_ICON: Record<string, string> = { dry: '☀️', wet: '🌧️', mixed: '⛅' };
 
 export class SeasonScene extends Phaser.Scene {
   private season!: SeasonState;
   private setup!: Setup;
+  private tire!: TireCompound;
   private setupBoxes: Record<Setup, Phaser.GameObjects.Rectangle> = {} as never;
   private bikeText!: Phaser.GameObjects.Text;
   private rndText!: Phaser.GameObjects.Text;
+  private tireBoxes: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() { super('SeasonScene'); }
-  init(data: { season: SeasonState }): void { this.season = data.season; }
+  init(data: { season: SeasonState }): void { this.season = data.season; this.tire = 'medium'; }
 
   create(): void {
     const idx = this.season.currentRaceIndex;
@@ -58,14 +63,31 @@ export class SeasonScene extends Phaser.Scene {
     const recIdx = SETUPS.indexOf(this.setup);
     this.add.text(130 + recIdx * 200, 298, '★ Recommended', { fontSize: '13px', color: '#f5c518' }).setOrigin(0.5);
     this.refreshSelectors();
-    this.add.text(40, 372, 'Risk is your call during the race — Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
+
+    // Tire selector
+    this.add.text(40, 400, 'Tire compound', { fontSize: '18px', color: '#e0e0e0' });
+    TIRE_COMPOUNDS_LIST.forEach((tc, i) => {
+      const compound = TIRE_COMPOUNDS[tc];
+      const box = this.add.rectangle(130 + i * 200, 442, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(130 + i * 200, 442, `${compound.label} (G:${compound.grip} D:${compound.durability})`, { fontSize: '13px', color: '#ffffff' }).setOrigin(0.5);
+      box.on('pointerup', () => { this.tire = tc; this.refreshTires(); SoundEngine.Instance.playClick(); });
+      this.tireBoxes.push(box);
+    });
+    this.refreshTires();
+    this.add.text(40, 492, `Weather: ${WEATHER_ICON[track.weather]} ${track.weather.toUpperCase()} — ${track.weather === 'wet' ? 'Higher crash risk, handling is crucial' : track.weather === 'mixed' ? 'Moderate conditions' : 'Optimal racing conditions'}`, { fontSize: '14px', color: track.weather === 'wet' ? '#4fc3f7' : '#94a3b8' });
+    this.add.text(40, 516, 'Risk is your call during the race — Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
 
     this.add.text(720, 64, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontSize: '14px', color: '#94a3b8' });
     this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
     renderStandings(this, 720, 120, getStandings(this.season), { showGap: true });
+    SaveSystem.Instance.saveSeason(this.season);
 
     new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => this.simulate() });
-  }
+    new Button(this, { x: 640, y: 690, width: 140, height: 56, label: 'SAVE', onClick: () => {
+      SaveSystem.Instance.saveSeason(this.season);
+      this.add.text(640, 660, 'Season saved!', { fontSize: '14px', color: '#00c853' }).setOrigin(0.5);
+     }});
+   }
 
   private refreshBike(): void {
     const b = this.season.playerRider.bike;
@@ -75,11 +97,19 @@ export class SeasonScene extends Phaser.Scene {
 
   private refreshSelectors(): void {
     SETUPS.forEach((st) => this.setupBoxes[st].setFillStyle(st === this.setup ? 0x0f3460 : 0x16213e).setStrokeStyle(2, st === this.setup ? 0xf5c518 : 0x0f3460));
-  }
+   }
+  private refreshTires(): void {
+    this.tireBoxes.forEach((box, i) => {
+      const tc = TIRE_COMPOUNDS_LIST[i];
+      const compound = TIRE_COMPOUNDS[tc];
+      box.setFillStyle(tc === this.tire ? compound.color : 0x16213e).setStrokeStyle(2, tc === this.tire ? 0xffffff : 0x0f3460);
+     });
+   }
 
   private simulate(): void {
     const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
-    const run = createRace(this.season, this.setup, rng);
+    SoundEngine.Instance.playClick();
+    const run = createRace(this.season, this.setup, this.tire, rng);
     this.scene.start('RaceScene', { season: this.season, run });
-  }
+    }
 }

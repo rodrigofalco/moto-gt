@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
-import { getStandings, getChampion } from '../core/Championship';
+import { getStandings, getChampion, aggregateCareerStats } from '../core/Championship';
 import { resultHeadline } from '../core/Advice';
+import { SaveSystem } from '../core/SaveSystem';
 import { BRAND_COLORS } from '../core/constants';
-import type { SeasonState, RaceResult, Rider } from '../core/types';
+import type { SeasonState, RaceResult, Rider, CareerStats } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
 const SETUP_SHORT: Record<string, string> = { topSpeed: 'TS', handling: 'HN', acceleration: 'AC' };
@@ -67,11 +68,14 @@ export class RaceResultScene extends Phaser.Scene {
   }
 
   private renderSeasonEnd(): void {
+    SaveSystem.Instance.deleteSave();
     const standings = getStandings(this.season);
     const champ = getChampion(this.season);
     const pos = standings.findIndex((r) => r.isPlayer) + 1;
     const p = this.season.playerRider;
     const dnfs = this.season.raceResults.filter((r) => r.finishingOrder.find((e) => e.rider.isPlayer)?.crashed).length;
+    const career = aggregateCareerStats(this.season);
+
     this.add.text(512, 44, 'SEASON COMPLETE', { fontSize: '38px', color: '#f5c518' }).setOrigin(0.5);
     this.add.text(512, 90, `Champion: ${champ.name} — ${champ.points} pts`, { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
     this.add.text(512, 118, `You finished P${pos} — ${p.points} pts | Wins ${p.positionCounts[0]} | Podiums ${p.positionCounts[0] + p.positionCounts[1] + p.positionCounts[2]} | DNFs ${dnfs}`, { fontSize: '15px', color: '#e0e0e0' }).setOrigin(0.5);
@@ -80,7 +84,37 @@ export class RaceResultScene extends Phaser.Scene {
 
     this.add.text(512, 372, 'Final Standings', { fontSize: '18px', color: '#f5c518' }).setOrigin(0.5);
     renderStandings(this, 400, 398, standings, { showGap: true });
-    new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'PLAY AGAIN', onClick: () => this.scene.start('MainMenuScene') });
+
+    // Career summary card
+    this.renderCareerSummary(career);
+
+    // Two buttons: continue career or reset
+    new Button(this, {
+      x: 340, y: 712, width: 280, height: 52,
+      label: 'NEW SEASON (CAREER CONTINUES)',
+      onClick: () => this.scene.start('MainMenuScene', { carryCareer: true, careerStats: career }),
+    });
+    new Button(this, {
+      x: 684, y: 712, width: 280, height: 52,
+      label: 'NEW CAREER (RESET)',
+      onClick: () => this.scene.start('MainMenuScene'),
+    });
+  }
+
+  private renderCareerSummary(career: CareerStats): void {
+    const cx = 512;
+    const cy = 310;
+    const box = this.add.rectangle(cx, cy, 420, 48, 0x0f3460).setStrokeStyle(1, 0x16213e);
+    box.setOrigin(0.5);
+
+    const lines = [
+      `Seasons: ${career.seasonsPlayed}`,
+      `Wins: ${career.totalWins}`,
+      `Podiums: ${career.totalPodiums}`,
+      `Best: P${career.bestChampionship === 99 ? '-' : career.bestChampionship}`,
+      `Points: ${career.totalPoints}`,
+    ];
+    this.add.text(cx, cy, lines.join('  |  '), { fontSize: '13px', color: '#94a3b8' }).setOrigin(0.5);
   }
 
   // Top-3 podium: 1st tallest (centre), 2nd left, 3rd right; medal-colored blocks with

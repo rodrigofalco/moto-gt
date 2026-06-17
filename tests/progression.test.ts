@@ -4,7 +4,7 @@ import type { Rider, RaceResult, Track } from '../src/core/types';
 
 beforeEach(resetProgression);
 
-const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.8, cornering: 0.1, acceleration: 0.1 } };
+const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.8, cornering: 0.1, acceleration: 0.1 }, weather: 'dry', wetGrip: 1.0 };
 
 function mkRider(id: string, isPlayer: boolean): Rider {
   return {
@@ -12,7 +12,8 @@ function mkRider(id: string, isPlayer: boolean): Rider {
     skills: { pace: 5, cornering: 5, consistency: 5 },
     bike: { speed: 5, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+    careerStats: { seasonsPlayed: 0, totalWins: 0, totalPodiums: 0, totalPoints: 0, bestChampionship: 99, lapsCompleted: 0 },
+     };
 }
 
 function resultWith(order: Rider[]): RaceResult {

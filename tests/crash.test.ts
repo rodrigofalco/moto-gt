@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { crashProbability } from '../src/core/CrashModel';
 import type { Track } from '../src/core/types';
 
-const technical: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.2, cornering: 0.6, acceleration: 0.2 } };
-const fast: Track = { id: 'f', name: 'F', location: 'X', weights: { speed: 0.6, cornering: 0.2, acceleration: 0.2 } };
+const technical: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.2, cornering: 0.6, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
+const fast: Track = { id: 'f', name: 'F', location: 'X', weights: { speed: 0.6, cornering: 0.2, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
 
 describe('CrashModel', () => {
   it('high risk is crashier than low risk', () => {

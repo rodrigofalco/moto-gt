@@ -1,24 +1,27 @@
-import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION } from './constants';
+import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot, TireCompound, TireParams } from './types';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION, TIRE_COMPOUNDS_LIST } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
+import { calcTireWear, getTireGrip, getTireCrashRisk } from './TireModel';
 import type { RNG } from './RNG';
 
 export interface RiderState {
   rider: Rider; setup: Setup; aiRisk: Risk; lastRisk: Risk;
-  basePace: number; axes: Axes;            // basePace excludes push (push is applied per lap by risk)
+  basePace: number; axes: Axes;
   progress: number; crashed: boolean; crashLap: number;
-  lastNoise: number;                       // AR(1) state: last lap's applied noise (0 before lap 1)
+  lastNoise: number;
+  tires: TireParams;
 }
 
 export interface RaceRun {
   raceIndex: number;
   track: Track;
   states: RiderState[];
-  lap: number;       // laps completed (0..RACE_LAPS)
-  meanPace: number;  // field-average basePace (compression reference; constant per race)
+  lap: number;
+  meanPace: number;
   rng: RNG;
+  playerTire: TireCompound;
 }
 
 function perLapCrashProb(risk: Risk, consistency: number, track: Track): number {
@@ -36,17 +39,22 @@ function compare(a: RiderState, b: RiderState, rng: RNG): number {
   return rng.nextFloat() - 0.5;
 }
 
-export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG): RaceRun {
+export function createRace(season: SeasonState, playerSetup: Setup, playerTire: TireCompound, rng: RNG): RaceRun {
   if (season.currentRaceIndex >= season.calendar.length) throw new Error('All races have been simulated.');
   const track = season.calendar[season.currentRaceIndex];
   const states: RiderState[] = [season.playerRider, ...season.aiRiders].map((rider) => {
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
-    const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng); // player risk comes live from stepLap
-    const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
-    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0, lastNoise: 0 };
-  });
+    const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng);
+    const tires: TireParams = {
+      compound: rider.isPlayer ? playerTire : TIRE_COMPOUNDS_LIST[rng.nextInt(0, 2)],
+      wear: 0,
+      grip: 1.0,
+    };
+    const axes = applySetup(baseAxes(rider.skills, rider.bike), setup, track.weather);
+    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track, track.weather), axes, progress: 0, crashed: false, crashLap: 0, lastNoise: 0, tires };
+   });
   const meanPace = states.reduce((a, s) => a + s.basePace, 0) / states.length || 7;
-  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng };
+  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng, playerTire };
 }
 
 // AR(1) momentum: blend carryover with fresh noise. Variance-preserving for the per-lap
@@ -70,21 +78,24 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
     const risk = s.rider.isPlayer ? playerRisk : s.aiRisk;
     s.lastRisk = risk;
     s.lastNoise = momentumNoise(s.lastNoise, run.rng.gaussian(0, LAP_NOISE_STD));
-    // Order-preserving compression toward the field mean: keeps the pack close without
-    // changing who finishes where (FIELD_COMPRESSION = 1 reproduces the raw spread).
+     // Order-preserving compression toward the field mean: keeps the pack close without
+     // changing who finishes where (FIELD_COMPRESSION = 1 reproduces the raw spread).
     const dev = (s.basePace - run.meanPace) + PUSH_BONUS[risk] + s.lastNoise;
-    s.progress += run.meanPace + FIELD_COMPRESSION * dev;
-    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track)) {
+    s.tires.wear = calcTireWear(run.lap, s.tires.compound, s.rider.skills.consistency);
+    s.tires.grip = getTireGrip(s.tires.wear, s.tires.compound);
+    const tireCrashRisk = getTireCrashRisk(s.tires.wear);
+    s.progress += run.meanPace + FIELD_COMPRESSION * dev * s.tires.grip;
+    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track) * tireCrashRisk) {
       s.crashed = true;
       s.crashLap = run.lap;
+     }
     }
-  }
-  // Drafting: a second pass over post-movement positions (pre-tow), so tows don't cascade.
+   // Drafting: a second pass over post-movement positions (pre-tow), so tows don't cascade.
   const preDraft = run.states.map((s) => s.progress);
   const crashed = run.states.map((s) => s.crashed);
   run.states.forEach((s, i) => {
     if (hasDraftTow(preDraft, crashed, i)) s.progress += DRAFT_BONUS;
-  });
+    });
 }
 
 export function finalizeRace(run: RaceRun, rng: RNG): RaceResult {
@@ -102,16 +113,16 @@ export function finalizeRace(run: RaceRun, rng: RNG): RaceResult {
 }
 
 // Non-interactive convenience: the player holds `playerRisk` for every lap.
-export function runRace(season: SeasonState, playerSetup: Setup, playerRisk: Risk, rng: RNG): { result: RaceResult; timeline: RaceTimeline } {
-  const run = createRace(season, playerSetup, rng);
+export function runRace(season: SeasonState, playerSetup: Setup, playerTire: TireCompound, playerRisk: Risk, rng: RNG): { result: RaceResult; timeline: RaceTimeline } {
+  const run = createRace(season, playerSetup, playerTire, rng);
   const laps: LapSnapshot[] = [];
   for (let i = 0; i < RACE_LAPS; i++) {
     stepLap(run, playerRisk);
     laps.push({ lap: run.lap, entries: run.states.map((s) => ({ riderId: s.rider.id, progress: s.progress, crashed: s.crashed })) });
-  }
+   }
   return { result: finalizeRace(run, rng), timeline: { laps, totalLaps: RACE_LAPS } };
 }
 
-export function simulateRace(season: SeasonState, playerSetup: Setup, playerRisk: Risk, rng: RNG): RaceResult {
-  return runRace(season, playerSetup, playerRisk, rng).result;
+export function simulateRace(season: SeasonState, playerSetup: Setup, playerTire: TireCompound, playerRisk: Risk, rng: RNG): RaceResult {
+  return runRace(season, playerSetup, playerTire, playerRisk, rng).result;
 }

@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { buildPath, pointAt, type SampledPath } from '../core/Path';
 import { TRACK_LAYOUTS } from '../data/trackLayouts';
-import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_STEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD } from '../core/constants';
+import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_STEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD, TIRE_COMPOUNDS } from '../core/constants';
 import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
-import type { SeasonState, Risk } from '../core/types';
+import { SoundEngine } from '../core/SoundEngine';
+import { generateCommentary } from '../core/Commentary';
+import type { SeasonState, Risk, CommentaryEvent, RaceSnapshot } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
 const ORDER: { risk: Risk; label: string }[] = [
@@ -16,6 +18,7 @@ const ORDER: { risk: Risk; label: string }[] = [
 
 interface SceneData { season: SeasonState; run: RaceRun; }
 interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; }
+interface TireIndicator { dot: Phaser.GameObjects.Arc; label: Phaser.GameObjects.Text; }
 
 export class RaceScene extends Phaser.Scene {
   private sd!: SceneData;
@@ -43,18 +46,24 @@ export class RaceScene extends Phaser.Scene {
   private calloutText!: Phaser.GameObjects.Text;
   private flashText!: Phaser.GameObjects.Text;            // brief overtake gained/lost flash
   private playerLapText!: Phaser.GameObjects.Text;
-  private flText!: Phaser.GameObjects.Text;               // fastest-lap banner
-  private youText!: Phaser.GameObjects.Text;              // "YOU" label that follows the player dot
+  private flText!: Phaser.GameObjects.Text;                // fastest-lap banner
+  private youText!: Phaser.GameObjects.Text;               // "YOU" label that follows the player dot
   private prevPlayerPos = -1;
+  private tireIndicators: TireIndicator[] = [];
+  private commentaryText!: Phaser.GameObjects.Text;
+  private engineSoundInterval: Phaser.Time.TimerEvent | null = null;
+  private prevPositions: Map<string, number> = new Map();
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
-    this.sd = data; this.gfx = new Map(); this.numbers = new Map();
+    this.sd = data; this.gfx = new Map(); this.numbers = new Map(); this.tireIndicators = [];
     this.prev = new Map(); this.cur = new Map(); this.placeBehind = new Map();
     this.lastLap = new Map(); this.bestLap = new Map(); this.raceTime = new Map(); this.fastest = null;
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = data.season.lastRisk ?? 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
-  }
+    this.commentaryText = null as never;
+    this.engineSoundInterval = null; this.prevPositions = new Map();
+   }
 
   create(): void {
     const run = this.sd.run;
@@ -115,11 +124,38 @@ export class RaceScene extends Phaser.Scene {
     this.refreshSpeed();
 
     this.drawLegend();
+
+     // Tire indicators — small colored dot next to each rider showing tire compound
+    for (const s of run.states) {
+      const tc = s.tires.compound;
+      const color = TIRE_COMPOUNDS[tc].color;
+      const tireDot = this.add.circle(OX + 14, OY, 3, color).setAlpha(0.7);
+      const tireLabel = this.add.text(OX + 20, OY, '•', { fontSize: '8px', color: '#94a3b8' }).setOrigin(0.5);
+      this.tireIndicators.push({ dot: tireDot, label: tireLabel });
+     }
+
+     // Commentary display
+    this.commentaryText = this.add.text(70, 560, '', { fontSize: '14px', color: '#d500f9', wordWrap: { width: 500 } }).setAlpha(0);
+
+     // Weather display
+    const weatherIcon = run.track.weather === 'wet' ? '🌧️' : run.track.weather === 'mixed' ? '⛅' : '☀️';
+    this.add.text(430, 28, `${weatherIcon} ${run.track.weather.toUpperCase()}`, { fontSize: '16px', color: '#94a3b8' });
+
+     // Mute button
+    const muteBtn = this.add.text(960, 28, '🔊', { fontSize: '16px', color: '#94a3b8' }).setInteractive({ useHandCursor: true });
+    muteBtn.on('pointerup', () => {
+      const muted = SoundEngine.Instance.toggleMute();
+      muteBtn.setText(muted ? '🔇' : '🔊');
+      muteBtn.setColor(muted ? '#ff5f7a' : '#94a3b8');
+      });
+
     new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
-    // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
+     // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
     this.advanceOneLap();
     this.renderFrame(0);
-  }
+     // Start engine sound
+    this.engineSoundInterval = this.time.addEvent({ delay: 500, callback: () => { if (!this.done) SoundEngine.Instance.playEngine(this.speed); }, loop: true });
+    }
 
   private drawLegend(): void {
     this.add.text(700, 348, 'Orders:  Attack = push (risky) · Defend = hold · Settle = safe', { fontSize: '12px', color: '#94a3b8', wordWrap: { width: 312 } });
@@ -174,7 +210,7 @@ export class RaceScene extends Phaser.Scene {
     stepLap(this.sd.run, this.order);
     this.snapshot(this.cur);
     this.lapsDone += 1;
-    // Record each rider's lap time from the progress gained this lap (skip crash laps).
+      // Record each rider's lap time from the progress gained this lap (skip crash laps).
     for (const s of this.sd.run.states) {
       if (s.crashed) continue;
       const delta = (this.cur.get(s.rider.id) ?? 0) - (this.prev.get(s.rider.id) ?? 0);
@@ -185,8 +221,17 @@ export class RaceScene extends Phaser.Scene {
       const best = this.bestLap.get(s.rider.id);
       if (best === undefined || lt < best) this.bestLap.set(s.rider.id, lt);
       if (!this.fastest || lt < this.fastest.time) this.fastest = { id: s.rider.id, time: lt };
-    }
-  }
+      }
+      // Track positions for overtake detection
+    for (const s of this.sd.run.states) this.prevPositions.set(s.rider.id, s.progress);
+      // Generate commentary
+    const commentary = this.buildCommentary();
+    if (commentary.length > 0) {
+      this.tweens.killTweensOf(this.commentaryText);
+      this.commentaryText.setText(commentary[commentary.length - 1].text).setAlpha(1);
+      this.tweens.add({ targets: this.commentaryText, alpha: 0, duration: 3000, ease: 'Quad.easeIn' });
+      }
+     }
 
   private renderFrame(frac: number): void {
     const EMA = 0.2; // smooths the train so overtakes slide past instead of snapping
@@ -311,14 +356,64 @@ export class RaceScene extends Phaser.Scene {
     while (this.lapsDone < RACE_LAPS) this.advanceOneLap();
     this.done = true;
     this.finish();
-  }
+    }
+
+  private buildCommentary(): CommentaryEvent[] {
+    const states = this.sd.run.states;
+    const positions = new Map<string, number>();
+    const sorted = states.slice().sort((a, b) => {
+      if (a.crashed !== b.crashed) return a.crashed ? 1 : -1;
+      return b.progress - a.progress;
+       });
+    sorted.forEach((s, i) => positions.set(s.rider.id, i + 1));
+
+    const crashed = new Set<string>();
+    for (const s of states) if (s.crashed) crashed.add(s.rider.id);
+
+    const fastestLap = this.fastest ? { id: this.fastest.id, time: formatLapTime(this.fastest.time) } : null;
+
+    const tireWear = new Map<string, number>();
+    for (const s of states) tireWear.set(s.rider.id, s.tires.wear);
+
+    const prev: RaceSnapshot = {
+      lap: this.lapsDone - 1,
+      totalLaps: RACE_LAPS,
+      positions: this.prevPositions,
+      riders: states.map((s) => ({ id: s.rider.id, name: s.rider.name })),
+      crashed: new Set(Array.from(crashed).filter((id) => !this.prevPositions.has(id) || this.prevPositions.get(id) === undefined)),
+      fastestLap: null,
+      tireWear: new Map(),
+      overtookBy: new Map(),
+      overtakeBy: new Map(),
+    };
+    const cur: RaceSnapshot = {
+      lap: this.lapsDone,
+      totalLaps: RACE_LAPS,
+      positions,
+      riders: states.map((s) => ({ id: s.rider.id, name: s.rider.name })),
+      crashed,
+      fastestLap: fastestLap,
+      tireWear,
+      overtookBy: new Map(),
+      overtakeBy: new Map(),
+    };
+
+    return generateCommentary(prev, cur);
+     }
 
   private finish(): void {
+    this.engineSoundInterval?.remove();
+    this.tireIndicators.forEach((ti) => {
+      ti.dot.destroy();
+      ti.label.destroy();
+       });
     const run = this.sd.run;
     const result = finalizeRace(run, run.rng);
     const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);
     applyRaceResult(this.sd.season, result);
     const playerSummary = summaries.find((su) => su.riderId === 'player')!;
+      // Play checkered flag sound
+    SoundEngine.Instance.playCheckered();
     this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary });
-  }
+     }
 }

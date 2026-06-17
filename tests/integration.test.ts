@@ -19,7 +19,7 @@ describe('full season integration', () => {
     let races = 0;
     while (!season.isSeasonComplete) {
       const track = season.calendar[season.currentRaceIndex];
-      const result = simulateRace(season, dominantSetup(track), 'medium', rng);
+      const result = simulateRace(season, dominantSetup(track), 'medium', 'medium', rng);
       applyProgression([season.playerRider, ...season.aiRiders], result);
       applyRaceResult(season, result);
       races++;
@@ -39,7 +39,7 @@ describe('full season integration', () => {
     const { runRace } = await import('../src/core/RaceEngine');
     const rng = new RNG(2026);
     const season = createSeason('Me', PILOT_ROSTER[0], BRAND_ROSTER[0], rng);
-    const { result, timeline } = runRace(season, 'topSpeed', 'high', rng);
+    const { result, timeline } = runRace(season, 'topSpeed', 'medium', 'high', rng);
     expect(timeline.laps).toHaveLength(timeline.totalLaps);
     const last = timeline.laps[timeline.laps.length - 1].entries;
     const finishers = last.filter((e) => !e.crashed);
@@ -53,10 +53,10 @@ describe('full season integration', () => {
     const rng = new RNG(1);
     const season = createSeason('Me', PILOT_ROSTER[0], BRAND_ROSTER[0], rng);
     while (!season.isSeasonComplete) {
-      const r = simulateRace(season, 'handling', 'low', rng);
+      const r = simulateRace(season, 'handling', 'medium', 'low', rng);
       applyProgression([season.playerRider, ...season.aiRiders], r);
       applyRaceResult(season, r);
-    }
-    expect(() => simulateRace(season, 'handling', 'low', rng)).toThrow();
-  });
+     }
+     expect(() => simulateRace(season, 'handling', 'medium', 'low', rng)).toThrow();
+    });
 });

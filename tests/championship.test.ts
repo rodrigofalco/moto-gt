@@ -10,9 +10,10 @@ function mkRider(id: string, isPlayer = false): Rider {
     skills: { pace: 5, cornering: 5, consistency: 5 },
     bike: { speed: 5, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+    careerStats: { seasonsPlayed: 0, totalWins: 0, totalPodiums: 0, totalPoints: 0, bestChampionship: 99, lapsCompleted: 0 },
+    };
 }
-const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.5, cornering: 0.3, acceleration: 0.2 } };
+const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.5, cornering: 0.3, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
 function mkSeason(): SeasonState {
   return {
     playerRider: mkRider('player', true),
@@ -24,7 +25,7 @@ function mkSeason(): SeasonState {
 describe('Championship', () => {
   it('applyRaceResult accumulates 101 points and advances the index', () => {
     const s = mkSeason();
-    applyRaceResult(s, simulateRace(s, 'topSpeed', 'medium', new RNG(1)));
+    applyRaceResult(s, simulateRace(s, 'topSpeed', 'medium', 'medium', new RNG(1)));
     expect(s.currentRaceIndex).toBe(1);
     expect([s.playerRider, ...s.aiRiders].reduce((a, r) => a + r.points, 0)).toBe(101);
   });

@@ -3,9 +3,10 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { createSeason } from '../core/factories/SeasonFactory';
 import { RNG } from '../core/RNG';
+import { SaveSystem } from '../core/SaveSystem';
 import { PILOT_ROSTER } from '../data/pilots';
 import { BRAND_ROSTER } from '../data/brands';
-import type { PilotArchetype, Brand } from '../core/types';
+import type { PilotArchetype, Brand, CareerStats } from '../core/types';
 
 export class MainMenuScene extends Phaser.Scene {
   private team = 'My Team';
@@ -16,8 +17,14 @@ export class MainMenuScene extends Phaser.Scene {
   private pilotCards: Card[] = [];
   private brandCards: Card[] = [];
   private startButton!: Button;
+  private continueButton!: Button;
+  private careerStats: CareerStats | null = null;
 
   constructor() { super('MainMenuScene'); }
+
+  init(data: { carryCareer?: boolean; careerStats?: CareerStats } = {}): void {
+    this.careerStats = data.carryCareer && data.careerStats ? data.careerStats : null;
+   }
 
   create(): void {
     this.add.text(512, 36, 'MotoGT', { fontSize: '52px', color: '#f5c518' }).setOrigin(0.5);
@@ -60,10 +67,20 @@ export class MainMenuScene extends Phaser.Scene {
       this.brandCards.push(card);
     });
 
-    this.startButton = new Button(this, { x: 512, y: 725, width: 280, height: 54, label: 'START SEASON', onClick: () => this.start() });
+    const save = SaveSystem.Instance;
+    const hasSave = save.hasSave();
+
+    this.continueButton = new Button(this, { x: 512, y: 645, width: 280, height: 48, label: 'CONTINUE', onClick: () => {
+      const s = save.loadSeason();
+      if (s) this.scene.start('SeasonScene', { season: s });
+     }});
+    this.continueButton.setEnabled(hasSave);
+
+    this.startButton = new Button(this, { x: 512, y: 725, width: 280, height: 54, label: 'NEW SEASON', onClick: () => this.start() });
     this.refresh();
     this.renderTeam();
-  }
+    this.renderCareerBadge();
+    }
 
   private onKey(e: KeyboardEvent): void {
     if (!this.editingTeam) return;
@@ -82,11 +99,18 @@ export class MainMenuScene extends Phaser.Scene {
 
   private refresh(): void {
     this.startButton.setEnabled(this.team.trim().length > 0 && this.pilot !== null && this.brand !== null);
-  }
+    this.continueButton.setEnabled(SaveSystem.Instance.hasSave());
+    }
+
+  private renderCareerBadge(): void {
+    if (!this.careerStats) return;
+    const badge = this.add.text(512, 680, `Career: ${this.careerStats.seasonsPlayed} seasons | ${this.careerStats.totalWins} wins | Best: P${this.careerStats.bestChampionship === 99 ? '-' : this.careerStats.bestChampionship}`, { fontSize: '13px', color: '#f5c518' }).setOrigin(0.5);
+    badge.setAlpha(0.7);
+    }
 
   private start(): void {
     if (!this.pilot || !this.brand) return;
-    const season = createSeason(this.team.trim(), this.pilot, this.brand, new RNG(Date.now() >>> 0));
+    const season = createSeason(this.team.trim(), this.pilot, this.brand, new RNG(Date.now() >>> 0), this.careerStats ?? undefined);
     this.scene.start('SeasonScene', { season });
-  }
+   }
 }

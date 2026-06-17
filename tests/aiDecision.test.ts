@@ -3,8 +3,8 @@ import { dominantSetup, aiSetup, aiRisk } from '../src/core/AIDecision';
 import { RNG } from '../src/core/RNG';
 import type { Rider, Track } from '../src/core/types';
 
-const technical: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.2, cornering: 0.6, acceleration: 0.2 } };
-const stopGo: Track = { id: 's', name: 'S', location: 'X', weights: { speed: 0.3, cornering: 0.25, acceleration: 0.45 } };
+const technical: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.2, cornering: 0.6, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
+const stopGo: Track = { id: 's', name: 'S', location: 'X', weights: { speed: 0.3, cornering: 0.25, acceleration: 0.45 }, weather: 'dry', wetGrip: 1.0 };
 
 function rider(consistency: number): Rider {
   return {
@@ -12,7 +12,8 @@ function rider(consistency: number): Rider {
     skills: { pace: 5, cornering: 5, consistency },
     bike: { speed: 5, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+    careerStats: { seasonsPlayed: 0, totalWins: 0, totalPodiums: 0, totalPoints: 0, bestChampionship: 99, lapsCompleted: 0 },
+     };
 }
 
 describe('AIDecision', () => {

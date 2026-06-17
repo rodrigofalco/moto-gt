@@ -4,7 +4,7 @@ import type { Track } from '../src/core/types';
 
 const skills = { pace: 8, cornering: 4, consistency: 6 };
 const bike = { speed: 8, handling: 4, acceleration: 6 };
-const fastTrack: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.6, cornering: 0.2, acceleration: 0.2 } };
+const fastTrack: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.6, cornering: 0.2, acceleration: 0.2 }, weather: 'dry', wetGrip: 1.0 };
 
 describe('PerformanceModel', () => {
   it('blends pilot+bike into all three axes', () => {
