@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { buildPath, pointAt, type SampledPath } from '../core/Path';
 import { TRACK_LAYOUTS } from '../data/trackLayouts';
-import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_SPREAD, LAP_TIME_BASE } from '../core/constants';
+import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD } from '../core/constants';
 import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
@@ -37,19 +37,21 @@ export class RaceScene extends Phaser.Scene {
   private placeBehind: Map<string, number> = new Map();   // smoothed train spacing (loop fraction) per rider
   private lastLap: Map<string, number> = new Map();       // last completed lap time (race-fiction seconds)
   private bestLap: Map<string, number> = new Map();
+  private raceTime: Map<string, number> = new Map();      // cumulative race-fiction time (drives gaps)
   private fastest: { id: string; time: number } | null = null;
   private chaseRing!: Phaser.GameObjects.Arc;             // marks the rider just ahead of the player
   private calloutText!: Phaser.GameObjects.Text;
   private flashText!: Phaser.GameObjects.Text;            // brief overtake gained/lost flash
   private playerLapText!: Phaser.GameObjects.Text;
   private flText!: Phaser.GameObjects.Text;               // fastest-lap banner
+  private youText!: Phaser.GameObjects.Text;              // "YOU" label that follows the player dot
   private prevPlayerPos = -1;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
     this.sd = data; this.gfx = new Map(); this.numbers = new Map();
     this.prev = new Map(); this.cur = new Map(); this.placeBehind = new Map();
-    this.lastLap = new Map(); this.bestLap = new Map(); this.fastest = null;
+    this.lastLap = new Map(); this.bestLap = new Map(); this.raceTime = new Map(); this.fastest = null;
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = data.season.lastRisk ?? 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
   }
@@ -70,17 +72,20 @@ export class RaceScene extends Phaser.Scene {
     for (const s of run.states) {
       const r = s.rider;
       const color = BRAND_COLORS[r.brandId] ?? 0x4fc3f7;
-      const ring = r.isPlayer ? this.add.circle(OX, OY, 12).setStrokeStyle(3, 0xf5c518) : undefined;
+      const ring = r.isPlayer ? this.add.circle(OX, OY, 15).setStrokeStyle(4, 0xf5c518) : undefined;
       const dot = this.add.circle(OX, OY, r.isPlayer ? 9 : 7, color).setStrokeStyle(2, 0x1a1a2e);
       const num = this.add.text(OX, OY, String(this.numbers.get(r.id)), { fontSize: '11px', color: '#0b0b14', fontStyle: 'bold' }).setOrigin(0.5);
       this.gfx.set(r.id, { dot, ring, num });
       this.prev.set(r.id, 0);
       this.cur.set(r.id, 0);
       this.placeBehind.set(r.id, 0);
+      this.raceTime.set(r.id, 0);
     }
 
     // Ring that marks whichever rider is directly ahead of the player (your battle).
-    this.chaseRing = this.add.circle(OX, OY, 13).setStrokeStyle(2, 0x00e5ff).setVisible(false);
+    this.chaseRing = this.add.circle(OX, OY, 16).setStrokeStyle(2, 0x00e5ff).setVisible(false);
+    // "YOU" label pinned above the player's dot so it's never ambiguous which one is you.
+    this.youText = this.add.text(OX, OY, 'YOU', { fontSize: '12px', color: '#f5c518', fontStyle: 'bold' }).setOrigin(0.5);
 
     this.lapText = this.add.text(700, 110, '', { fontSize: '20px', color: '#f5c518' });
     this.playerLapText = this.add.text(700, 134, '', { fontSize: '14px', color: '#9ad0ff' });
@@ -111,6 +116,8 @@ export class RaceScene extends Phaser.Scene {
 
     this.drawLegend();
     new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
+    // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
+    this.advanceOneLap();
     this.renderFrame(0);
   }
 
@@ -172,8 +179,9 @@ export class RaceScene extends Phaser.Scene {
       if (s.crashed) continue;
       const delta = (this.cur.get(s.rider.id) ?? 0) - (this.prev.get(s.rider.id) ?? 0);
       if (delta <= 0.01) continue;
-      const lt = lapTime(delta, this.progressPerLoop, LAP_TIME_BASE);
+      const lt = lapTime(delta, this.progressPerLoop, LAP_TIME_BASE, LAP_TIME_SPREAD);
       this.lastLap.set(s.rider.id, lt);
+      this.raceTime.set(s.rider.id, (this.raceTime.get(s.rider.id) ?? 0) + lt);
       const best = this.bestLap.get(s.rider.id);
       if (best === undefined || lt < best) this.bestLap.set(s.rider.id, lt);
       if (!this.fastest || lt < this.fastest.time) this.fastest = { id: s.rider.id, time: lt };
@@ -230,15 +238,22 @@ export class RaceScene extends Phaser.Scene {
     const playerIdx = order.findIndex((s) => s.rider.isPlayer);
 
     const pLast = this.lastLap.get(this.sd.season.playerRider.id);
-    this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone + 1)} / ${RACE_LAPS}`);
+    this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone)} / ${RACE_LAPS}`);
     this.playerLapText.setText(`Last lap: ${pLast ? formatLapTime(pLast) : '—'}`);
 
+    // Gaps come from accumulated lap times (same clock as the lap times themselves), so a
+    // gap of "+2.4" is consistent with the lap times shown; a full lap behind reads "+1 LAP".
+    const leaderTime = this.raceTime.get(order[0]?.rider.id ?? '') ?? 0;
+    const leaderProg = order[0]?.progress ?? 0;
     this.orderText.setText(order.map((s, i) => {
       const r = s.rider;
       const near = Math.abs(i - playerIdx) === 1;
       const tag = r.isPlayer ? '>' : near ? '·' : ' ';
-      const gap = i > 0 ? ((order[i - 1].progress - s.progress) / this.progressPerLoop) * LAP_TIME_BASE : 0;
-      const gapStr = s.crashed ? 'OUT' : i === 0 ? 'LEAD' : `+${gap.toFixed(1)}`;
+      const lapsDown = Math.floor((leaderProg - s.progress) / this.progressPerLoop + 1e-9);
+      const gapStr = s.crashed ? 'OUT'
+        : i === 0 ? 'LEAD'
+        : lapsDown >= 1 ? `+${lapsDown} LAP`
+        : `+${((this.raceTime.get(r.id) ?? 0) - leaderTime).toFixed(1)}`;
       const lt = this.lastLap.get(r.id);
       const ltStr = s.crashed || !lt ? '—' : formatLapTime(lt);
       return `${tag}${String(i + 1).padStart(2)} #${String(this.numbers.get(r.id)).padStart(2)} ${r.name.slice(0, 9).padEnd(9)} ${gapStr.padStart(6)} ${ltStr.padStart(8)}`;
@@ -259,12 +274,16 @@ export class RaceScene extends Phaser.Scene {
       const ahead = order[playerIdx - 1];
       const pos = screen.get(ahead.rider.id)!;
       this.chaseRing.setPosition(pos.x, pos.y).setVisible(true);
-      const gap = ((ahead.progress - me.progress) / this.progressPerLoop) * LAP_TIME_BASE;
-      this.calloutText.setText(`P${playerIdx + 1} — chasing #${this.numbers.get(ahead.rider.id)} ${ahead.rider.name} (+${gap.toFixed(1)}s)`);
+      const gapS = (this.raceTime.get(me.rider.id) ?? 0) - (this.raceTime.get(ahead.rider.id) ?? 0);
+      this.calloutText.setText(`P${playerIdx + 1} — chasing #${this.numbers.get(ahead.rider.id)} ${ahead.rider.name} (+${gapS.toFixed(1)}s)`);
     } else {
       this.chaseRing.setVisible(false);
       this.calloutText.setText('You are leading the race!');
     }
+
+    // Keep the "YOU" label pinned just above the player's dot.
+    const myPos = screen.get(this.sd.season.playerRider.id);
+    if (myPos) this.youText.setPosition(myPos.x, myPos.y - 18);
 
     // Overtake flash when the player's position changes (only at lap boundaries).
     const curPos = playerIdx + 1;
@@ -283,7 +302,7 @@ export class RaceScene extends Phaser.Scene {
     const lapMs = (RACE_ANIM_SECONDS * 1000) / RACE_LAPS;
     this.acc += delta * this.speed;
     while (this.acc >= lapMs && this.lapsDone < RACE_LAPS) { this.advanceOneLap(); this.acc -= lapMs; }
-    if (this.lapsDone >= RACE_LAPS) { this.renderFrame(1); this.done = true; this.time.delayedCall(900, () => this.finish()); return; }
+    if (this.lapsDone >= RACE_LAPS && this.acc >= lapMs) { this.renderFrame(1); this.done = true; this.time.delayedCall(900, () => this.finish()); return; }
     this.renderFrame(Math.min(1, this.acc / lapMs));
   }
 

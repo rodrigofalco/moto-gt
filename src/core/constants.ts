@@ -47,13 +47,14 @@ export const LAP_NOISE_STD = 1.5;
 export const MOMENTUM_WEIGHT = 0.6;   // AR(1): fraction of last lap's noise carried into this lap
 export const DRAFT_RANGE = 2.0;       // progress-points: a trailing rider within this of someone ahead gets a tow
 export const DRAFT_BONUS = 0.3;       // progress-points/lap tow for a rider with a non-crashed rider close ahead
-export const RACE_ANIM_SECONDS = 80;          // 1× ≈ 10s/lap; speed control scales it
+export const RACE_ANIM_SECONDS = 32;          // 1× ≈ 4s/lap; speed control scales it (continuous motion)
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
 // Race-day view (gap-train + lap times). See docs/superpowers/specs/2026-06-16-race-view-overhaul-design.md.
 export const MIN_SEP = 0.045;                 // min loop-fraction between consecutive dots (keeps order readable)
 export const MAX_SPREAD = 0.5;                // field occupies at most half the ring (tail never wraps onto leader)
 export const LAP_TIME_BASE = 90.0;            // race-fiction seconds to cover one loop at average pace
+export const LAP_TIME_SPREAD = 0.25;          // how much pace variation shows in lap times (0 = all identical, 1 = raw)
 
 // Race-day dot colors by bike brand id.
 export const BRAND_COLORS: Record<string, number> = {

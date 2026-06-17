@@ -55,6 +55,14 @@ describe('lapTime', () => {
   it('stays finite when delta collapses to zero', () => {
     expect(Number.isFinite(lapTime(0, 7, 90))).toBe(true);
   });
+  it('compresses realistic pace variation into a tight band around base', () => {
+    // deltas across a normal race lap (5..9 on a 7 loop) should stay near 90s, not 54s..2:22.
+    for (const d of [5, 6, 7, 8, 9]) {
+      const t = lapTime(d, 7, 90);
+      expect(t).toBeGreaterThan(80);
+      expect(t).toBeLessThan(100);
+    }
+  });
 });
 
 describe('formatLapTime', () => {

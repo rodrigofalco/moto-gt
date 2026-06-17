@@ -41,10 +41,14 @@ export function trainLayout(
   return slots;
 }
 
-// Race-fiction lap time: `base` seconds to cover one loop (progressPerLoop) at average
-// pace. A lap that gained more progress was faster, so the time is smaller.
-export function lapTime(delta: number, progressPerLoop: number, base: number): number {
-  return (base * progressPerLoop) / Math.max(delta, 0.01);
+// Race-fiction lap time: `base` seconds to cover one loop at average pace. A lap that
+// gained more progress was faster (smaller time). `spread` compresses how much the
+// simulation's progress noise shows up as time variation, so laps cluster realistically
+// (spread 0 → every lap == base; 1 → raw progress ratio). delta is floored so a near-zero
+// (crash-ish) lap can't produce an absurd time.
+export function lapTime(delta: number, progressPerLoop: number, base: number, spread = 0.25): number {
+  const ratio = progressPerLoop / Math.max(delta, progressPerLoop * 0.4);
+  return base * (1 + spread * (ratio - 1));
 }
 
 // "1:29.430" at/over a minute, "58.200" under. Always 3 decimal places.
