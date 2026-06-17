@@ -1,5 +1,5 @@
 import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT } from './constants';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
@@ -53,6 +53,13 @@ export function momentumNoise(lastNoise: number, fresh: number): number {
   return MOMENTUM_WEIGHT * lastNoise + Math.sqrt(1 - MOMENTUM_WEIGHT * MOMENTUM_WEIGHT) * fresh;
 }
 
+// A rider gets a tow if at least one non-crashed rider is strictly ahead within DRAFT_RANGE.
+export function hasDraftTow(progress: number[], crashed: boolean[], i: number): boolean {
+  if (crashed[i]) return false;
+  return progress.some((p, j) =>
+    j !== i && !crashed[j] && p > progress[i] && p - progress[i] <= DRAFT_RANGE);
+}
+
 // Advance exactly one lap. The player uses `playerRisk` this lap; AI use their fixed race risk.
 export function stepLap(run: RaceRun, playerRisk: Risk): void {
   run.lap += 1;
@@ -67,6 +74,12 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
       s.crashLap = run.lap;
     }
   }
+  // Drafting: a second pass over post-movement positions (pre-tow), so tows don't cascade.
+  const preDraft = run.states.map((s) => s.progress);
+  const crashed = run.states.map((s) => s.crashed);
+  run.states.forEach((s, i) => {
+    if (hasDraftTow(preDraft, crashed, i)) s.progress += DRAFT_BONUS;
+  });
 }
 
 export function finalizeRace(run: RaceRun, rng: RNG): RaceResult {
