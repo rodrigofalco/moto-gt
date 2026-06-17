@@ -51,8 +51,9 @@ export const RACE_ANIM_SECONDS = 32;          // 1× ≈ 4s/lap; speed control s
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
 // Race-day view (gap-train + lap times). See docs/superpowers/specs/2026-06-16-race-view-overhaul-design.md.
-export const MIN_SEP = 0.045;                 // min loop-fraction between consecutive dots (keeps order readable)
-export const MAX_SPREAD = 0.5;                // field occupies at most half the ring (tail never wraps onto leader)
+export const MIN_SEP = 0.03;                  // min loop-fraction between consecutive dots (prevents stacking)
+export const MAX_STEP = 0.06;                 // max loop-fraction between consecutive dots ((GRID-1)*MAX_STEP < 1 loop)
+export const MAX_SPREAD = 0.5;                // where crashed-out riders are parked on the ring
 export const LAP_TIME_BASE = 90.0;            // race-fiction seconds to cover one loop at average pace
 export const LAP_TIME_SPREAD = 0.25;          // how much pace variation shows in lap times (0 = all identical, 1 = raw)
 

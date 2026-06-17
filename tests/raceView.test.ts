@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../src/core/raceView';
 
-const OPTS = { minSep: 0.045, gapScale: 0.0714, maxSpread: 0.5 };
+const OPTS = { minSep: 0.03, gapScale: 0.0714, maxStep: 0.06, maxSpread: 0.5 };
 
 function e(id: string, progress: number, grid: number, crashed = false): TrainEntry {
   return { id, progress, crashed, grid };
@@ -20,18 +20,24 @@ describe('trainLayout', () => {
     const slots = trainLayout([e('x', 7, 2), e('y', 7, 1)], OPTS);
     expect(slots.map((s) => s.id)).toEqual(['y', 'x']); // grid 1 before grid 2
     expect(slots[0].placeBehind).toBe(0);
-    expect(slots[1].placeBehind).toBeCloseTo(0.045, 5);
+    expect(slots[1].placeBehind).toBeCloseTo(0.03, 5); // minSep, not stacked
   });
 
-  it('reflects the real gap once it exceeds the running minimum', () => {
-    // leader 20, trailer 6 → gap 14 → 14*0.0714 ≈ 1.0, clamped to maxSpread 0.5
+  it('caps an oversized gap at maxStep so the tail cannot run off the track', () => {
+    // leader 20, trailer 6 → gap 14 → 14*0.0714 ≈ 1.0, clamped to maxStep 0.06
     const slots = trainLayout([e('a', 20, 1), e('b', 6, 2)], OPTS);
-    expect(slots[1].placeBehind).toBe(0.5);
+    expect(slots[1].placeBehind).toBeCloseTo(0.06, 5);
   });
 
-  it('never exceeds MAX_SPREAD', () => {
-    const slots = trainLayout([e('a', 100, 1), e('b', 0, 2), e('c', 0, 3)], OPTS);
-    for (const s of slots) expect(s.placeBehind).toBeLessThanOrEqual(0.5 + 1e-9);
+  it('never stacks a whole lapped field — every dot stays >= MIN_SEP apart and in order', () => {
+    // leader miles ahead, the rest jammed together: would all clamp to one point under the old cap.
+    const slots = trainLayout([e('a', 100, 1), e('b', 0, 2), e('c', 0, 3), e('d', 0, 4)], OPTS);
+    expect(slots.map((s) => s.id)).toEqual(['a', 'b', 'c', 'd']);
+    for (let i = 1; i < slots.length; i++) {
+      expect(slots[i].placeBehind - slots[i - 1].placeBehind).toBeGreaterThanOrEqual(0.03 - 1e-9);
+    }
+    // and the whole field still fits within one loop (no wrap onto the leader)
+    expect(slots[slots.length - 1].placeBehind).toBeLessThan(1);
   });
 
   it('excludes crashed riders from spacing and ranks them last', () => {

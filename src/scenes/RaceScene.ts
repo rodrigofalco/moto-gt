@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { buildPath, pointAt, type SampledPath } from '../core/Path';
 import { TRACK_LAYOUTS } from '../data/trackLayouts';
-import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD } from '../core/constants';
+import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_STEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD } from '../core/constants';
 import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
@@ -207,7 +207,7 @@ export class RaceScene extends Phaser.Scene {
     const entries: TrainEntry[] = states.map((s) => ({
       id: s.rider.id, progress: trueP.get(s.rider.id)!, crashed: s.crashed, grid: this.numbers.get(s.rider.id) ?? 1,
     }));
-    const slots = new Map(trainLayout(entries, { minSep: MIN_SEP, gapScale, maxSpread: MAX_SPREAD }).map((sl) => [sl.id, sl]));
+    const slots = new Map(trainLayout(entries, { minSep: MIN_SEP, gapScale, maxStep: MAX_STEP, maxSpread: MAX_SPREAD }).map((sl) => [sl.id, sl]));
 
     const screen = new Map<string, { x: number; y: number }>();
     for (const s of states) {

@@ -8,27 +8,28 @@ export interface TrainSlot { id: string; placeBehind: number; crashed: boolean; 
 // Place each non-crashed rider behind the leader along the track, so the train's
 // spatial order is exactly the standings order (progress desc, grid as tie-break).
 // `placeBehind` is a loop fraction: 0 = leader, larger = further back.
+//
+// Spacing accumulates per-gap: the interval to the car ahead is clamped to
+// [minSep, maxStep]. minSep guarantees dots never stack (even a whole field lapped onto
+// the same progress stays separated and in order); maxStep caps any one gap so a lapped
+// backmarker can't push the rest off the track. With (GRID-1)*maxStep <= ~one loop the
+// train never wraps onto the leader.
 export function trainLayout(
   entries: TrainEntry[],
-  opts: { minSep: number; gapScale: number; maxSpread: number },
+  opts: { minSep: number; gapScale: number; maxStep: number; maxSpread: number },
 ): TrainSlot[] {
   const runners = entries
     .filter((e) => !e.crashed)
     .slice()
     .sort((a, b) => b.progress - a.progress || a.grid - b.grid);
-  const leaderProgress = runners.length ? runners[0].progress : 0;
 
   const slots: TrainSlot[] = [];
-  let prev = 0;
+  let placeBehind = 0;
   runners.forEach((entry, idx) => {
-    let placeBehind: number;
-    if (idx === 0) {
-      placeBehind = 0;
-    } else {
-      const byGap = (leaderProgress - entry.progress) * opts.gapScale;
-      placeBehind = Math.min(Math.max(prev + opts.minSep, byGap), opts.maxSpread);
+    if (idx > 0) {
+      const rawStep = (runners[idx - 1].progress - entry.progress) * opts.gapScale;
+      placeBehind += Math.min(Math.max(rawStep, opts.minSep), opts.maxStep);
     }
-    prev = placeBehind;
     slots.push({ id: entry.id, placeBehind, crashed: false, rank: idx + 1 });
   });
 
