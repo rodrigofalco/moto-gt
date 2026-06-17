@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createSeason } from '../src/core/factories/SeasonFactory';
-import { simulateRace, finalizeRace } from '../src/core/RaceEngine';
+import { simulateRace } from '../src/core/RaceEngine';
 import { applyRaceResult, getChampion } from '../src/core/Championship';
 import { PILOT_ROSTER } from '../src/data/pilots';
 import { BRAND_ROSTER } from '../src/data/brands';
@@ -14,7 +14,7 @@ function simulateOneRace(
   season: ReturnType<typeof createSeason>,
   rng: RNGType
 ): ReturnType<typeof simulateRace> {
-  const result = simulateRace(season, { topSpeed: 1, handling: 1, acceleration: 1 }, 'medium', rng);
+  const result = simulateRace(season, 'topSpeed' as const, 'medium', rng);
   applyRaceResult(season, result);
   return result;
 }
@@ -63,8 +63,8 @@ describe('P0.2 — full season characterization', () => {
     const season2 = createSeason('Team A', PILOT_ROSTER[0], BRAND_ROSTER[0], rng2);
 
     for (let i = 0; i < 6; i++) {
-      const r1 = simulateRace(season1, { topSpeed: 1, handling: 1, acceleration: 1 }, 'medium', new RNG(42 + i));
-      const r2 = simulateRace(season2, { topSpeed: 1, handling: 1, acceleration: 1 }, 'medium', new RNG(42 + i));
+      const r1 = simulateRace(season1, 'topSpeed' as const, 'medium', new RNG(42 + i));
+      const r2 = simulateRace(season2, 'topSpeed' as const, 'medium', new RNG(42 + i));
 
       const pos1 = r1.finishingOrder.map((e) => e.rider.id);
       const pos2 = r2.finishingOrder.map((e) => e.rider.id);
