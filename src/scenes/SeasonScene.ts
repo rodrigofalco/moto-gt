@@ -7,6 +7,7 @@ import { investBikePoint } from '../core/Progression';
 import { RNG } from '../core/RNG';
 import { SETUPS } from '../core/constants';
 import { recommendedSetup } from '../core/Advice';
+import { SoundEngine } from '../core/SoundEngine';
 import type { SeasonState, Setup, BikeParams } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
@@ -22,6 +23,7 @@ export class SeasonScene extends Phaser.Scene {
   init(data: { season: SeasonState }): void { this.season = data.season; }
 
   create(): void {
+    const sound = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
     const idx = this.season.currentRaceIndex;
     const track = this.season.calendar[idx];
     this.setup = recommendedSetup(track.weights);
@@ -43,7 +45,7 @@ export class SeasonScene extends Phaser.Scene {
     (['speed', 'handling', 'acceleration'] as (keyof BikeParams)[]).forEach((param, i) => {
       const x = 40 + i * 160;
       const plus = this.add.text(x, 210, `[+] ${param}`, { fontSize: '15px', color: '#00c853' }).setInteractive({ useHandCursor: true });
-      plus.on('pointerup', () => { if (investBikePoint(this.season.playerRider, param)) this.refreshBike(); });
+       plus.on('pointerup', () => { if (investBikePoint(this.season.playerRider, param)) { sound.playClick(); this.refreshBike(); } });
     });
     this.refreshBike();
 
@@ -52,7 +54,7 @@ export class SeasonScene extends Phaser.Scene {
     SETUPS.forEach((st, i) => {
       const box = this.add.rectangle(130 + i * 200, 322, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
       this.add.text(130 + i * 200, 322, SETUP_LABEL[st], { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
-      box.on('pointerup', () => { this.setup = st; this.refreshSelectors(); });
+      box.on('pointerup', () => { sound.playClick(); this.setup = st; this.refreshSelectors(); });
       this.setupBoxes[st] = box;
     });
     const recIdx = SETUPS.indexOf(this.setup);
@@ -64,7 +66,7 @@ export class SeasonScene extends Phaser.Scene {
     this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
     renderStandings(this, 720, 120, getStandings(this.season), { showGap: true });
 
-    new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => this.simulate() });
+    new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => { sound.playClick(); this.simulate(); } });
   }
 
   private refreshBike(): void {

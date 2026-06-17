@@ -4,6 +4,7 @@ import { renderStandings } from '../ui/StandingsTable';
 import { getStandings, getChampion } from '../core/Championship';
 import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
+import { SoundEngine } from '../core/SoundEngine';
 import type { SeasonState, RaceResult, Rider } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
@@ -21,10 +22,12 @@ export class RaceResultScene extends Phaser.Scene {
   }
 
   create(): void {
+    const sound = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
     if (this.season.isSeasonComplete) { this.renderSeasonEnd(); return; }
 
     this.add.text(40, 24, `Results — ${this.result.track.name}`, { fontSize: '24px', color: '#f5c518' });
     const pe = this.result.finishingOrder.find((e) => e.rider.isPlayer)!;
+    sound.playCheckeredFlag();
     const champPos = getStandings(this.season).findIndex((r) => r.isPlayer) + 1;
     const racesLeft = this.season.calendar.length - this.season.currentRaceIndex;
     this.add.text(40, 52, resultHeadline(pe.position, pe.crashed, champPos, racesLeft), { fontSize: '18px', color: '#00e5ff' });

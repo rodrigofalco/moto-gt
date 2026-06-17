@@ -7,6 +7,7 @@ import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
+import { SoundEngine } from '../core/SoundEngine';
 import type { SeasonState, Risk } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
@@ -46,6 +47,8 @@ export class RaceScene extends Phaser.Scene {
   private flText!: Phaser.GameObjects.Text;               // fastest-lap banner
   private youText!: Phaser.GameObjects.Text;              // "YOU" label that follows the player dot
   private prevPlayerPos = -1;
+   private soundEngine!: SoundEngine;
+   private muteBtn!: Phaser.GameObjects.Text;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
@@ -113,6 +116,14 @@ export class RaceScene extends Phaser.Scene {
       this.speedBoxes.push(box);
     });
     this.refreshSpeed();
+
+     // Mute button (top-right speaker icon).
+    this.soundEngine = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
+    this.muteBtn = this.add.text(980, 16, this.soundEngine.isMuted() ? '🔇' : '🔊', { fontSize: '22px' }).setInteractive({ useHandCursor: true });
+    this.muteBtn.on('pointerup', () => {
+      this.soundEngine.toggleMute();
+      this.muteBtn.setText(this.soundEngine.isMuted() ? '🔇' : '🔊');
+     });
 
     this.drawLegend();
     new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
@@ -270,7 +281,8 @@ export class RaceScene extends Phaser.Scene {
     if (me?.crashed) {
       this.chaseRing.setVisible(false);
       this.calloutText.setText('You crashed out.');
-    } else if (playerIdx > 0) {
+      this.soundEngine.playCrash();
+     } else if (playerIdx > 0) {
       const ahead = order[playerIdx - 1];
       const pos = screen.get(ahead.rider.id)!;
       this.chaseRing.setPosition(pos.x, pos.y).setVisible(true);
@@ -288,12 +300,13 @@ export class RaceScene extends Phaser.Scene {
     // Overtake flash when the player's position changes (only at lap boundaries).
     const curPos = playerIdx + 1;
     if (this.prevPlayerPos !== -1 && curPos !== this.prevPlayerPos && !me?.crashed) {
-      const gained = curPos < this.prevPlayerPos;
-      this.flashText.setText(`${gained ? '▲' : '▼'} P${this.prevPlayerPos} → P${curPos}`)
-        .setColor(gained ? '#00c853' : '#ff5f7a').setAlpha(1);
-      this.tweens.killTweensOf(this.flashText);
-      this.tweens.add({ targets: this.flashText, alpha: 0, duration: 1400, ease: 'Quad.easeIn' });
-    }
+     const gained = curPos < this.prevPlayerPos;
+       this.flashText.setText(`${gained ? '▲' : '▼'} P${this.prevPlayerPos} → P${curPos}`)
+         .setColor(gained ? '#00c853' : '#ff5f7a').setAlpha(1);
+       this.tweens.killTweensOf(this.flashText);
+       this.tweens.add({ targets: this.flashText, alpha: 0, duration: 1400, ease: 'Quad.easeIn' });
+       if (gained) this.soundEngine.playOvertake();
+      }
     this.prevPlayerPos = curPos;
   }
 
@@ -302,9 +315,10 @@ export class RaceScene extends Phaser.Scene {
     const lapMs = (RACE_ANIM_SECONDS * 1000) / RACE_LAPS;
     this.acc += delta * this.speed;
     while (this.acc >= lapMs && this.lapsDone < RACE_LAPS) { this.advanceOneLap(); this.acc -= lapMs; }
-    if (this.lapsDone >= RACE_LAPS && this.acc >= lapMs) { this.renderFrame(1); this.done = true; this.time.delayedCall(900, () => this.finish()); return; }
+    if (this.lapsDone >= RACE_LAPS && this.acc >= lapMs) { this.renderFrame(1); this.done = true; this.soundEngine.stopEngine(); this.time.delayedCall(900, () => this.finish()); return; }
     this.renderFrame(Math.min(1, this.acc / lapMs));
-  }
+    this.soundEngine.playEngine(this.speed);
+   }
 
   private skip(): void {
     if (this.done) return;
@@ -314,11 +328,12 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private finish(): void {
+    this.soundEngine.playCheckeredFlag();
     const run = this.sd.run;
     const result = finalizeRace(run, run.rng);
     const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);
     applyRaceResult(this.sd.season, result);
     const playerSummary = summaries.find((su) => su.riderId === 'player')!;
     this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary });
-  }
+   }
 }
