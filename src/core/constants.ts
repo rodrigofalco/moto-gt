@@ -47,6 +47,11 @@ export const LAP_NOISE_STD = 1.5;
 export const MOMENTUM_WEIGHT = 0.6;   // AR(1): fraction of last lap's noise carried into this lap
 export const DRAFT_RANGE = 2.0;       // progress-points: a trailing rider within this of someone ahead gets a tow
 export const DRAFT_BONUS = 0.3;       // progress-points/lap tow for a rider with a non-crashed rider close ahead
+// Pulls every rider's per-lap pace toward the field mean so the pack stays close (no
+// blowout lapping) WITHOUT changing finishing order — it's an order-preserving linear
+// compression around the mean, so champion rates (balance) are unchanged. 1.0 = no
+// compression (raw spread); lower = tighter racing.
+export const FIELD_COMPRESSION = 0.35;
 export const RACE_ANIM_SECONDS = 32;          // 1× ≈ 4s/lap; speed control scales it (continuous motion)
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 

@@ -1,5 +1,5 @@
 import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS } from './constants';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
@@ -17,6 +17,7 @@ export interface RaceRun {
   track: Track;
   states: RiderState[];
   lap: number;       // laps completed (0..RACE_LAPS)
+  meanPace: number;  // field-average basePace (compression reference; constant per race)
   rng: RNG;
 }
 
@@ -44,7 +45,8 @@ export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG): R
     const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
     return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0, lastNoise: 0 };
   });
-  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, rng };
+  const meanPace = states.reduce((a, s) => a + s.basePace, 0) / states.length || 7;
+  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng };
 }
 
 // AR(1) momentum: blend carryover with fresh noise. Variance-preserving for the per-lap
@@ -68,7 +70,10 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
     const risk = s.rider.isPlayer ? playerRisk : s.aiRisk;
     s.lastRisk = risk;
     s.lastNoise = momentumNoise(s.lastNoise, run.rng.gaussian(0, LAP_NOISE_STD));
-    s.progress += s.basePace + PUSH_BONUS[risk] + s.lastNoise;
+    // Order-preserving compression toward the field mean: keeps the pack close without
+    // changing who finishes where (FIELD_COMPRESSION = 1 reproduces the raw spread).
+    const dev = (s.basePace - run.meanPace) + PUSH_BONUS[risk] + s.lastNoise;
+    s.progress += run.meanPace + FIELD_COMPRESSION * dev;
     if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track)) {
       s.crashed = true;
       s.crashLap = run.lap;
