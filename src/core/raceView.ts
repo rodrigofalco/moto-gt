@@ -1,0 +1,56 @@
+// Pure presentation helpers for the race-day view. No Phaser, no state.
+// Turns each rider's live progress into an on-track "train" position, and derives
+// race-fiction lap times. See docs/superpowers/specs/2026-06-16-race-view-overhaul-design.md.
+
+export interface TrainEntry { id: string; progress: number; crashed: boolean; grid: number; }
+export interface TrainSlot { id: string; placeBehind: number; crashed: boolean; rank: number; }
+
+// Place each non-crashed rider behind the leader along the track, so the train's
+// spatial order is exactly the standings order (progress desc, grid as tie-break).
+// `placeBehind` is a loop fraction: 0 = leader, larger = further back.
+export function trainLayout(
+  entries: TrainEntry[],
+  opts: { minSep: number; gapScale: number; maxSpread: number },
+): TrainSlot[] {
+  const runners = entries
+    .filter((e) => !e.crashed)
+    .slice()
+    .sort((a, b) => b.progress - a.progress || a.grid - b.grid);
+  const leaderProgress = runners.length ? runners[0].progress : 0;
+
+  const slots: TrainSlot[] = [];
+  let prev = 0;
+  runners.forEach((entry, idx) => {
+    let placeBehind: number;
+    if (idx === 0) {
+      placeBehind = 0;
+    } else {
+      const byGap = (leaderProgress - entry.progress) * opts.gapScale;
+      placeBehind = Math.min(Math.max(prev + opts.minSep, byGap), opts.maxSpread);
+    }
+    prev = placeBehind;
+    slots.push({ id: entry.id, placeBehind, crashed: false, rank: idx + 1 });
+  });
+
+  // Crashed riders are out of the train: ranked after all runners, parked at the tail.
+  entries
+    .filter((e) => e.crashed)
+    .forEach((entry, k) =>
+      slots.push({ id: entry.id, placeBehind: opts.maxSpread, crashed: true, rank: runners.length + k + 1 }));
+
+  return slots;
+}
+
+// Race-fiction lap time: `base` seconds to cover one loop (progressPerLoop) at average
+// pace. A lap that gained more progress was faster, so the time is smaller.
+export function lapTime(delta: number, progressPerLoop: number, base: number): number {
+  return (base * progressPerLoop) / Math.max(delta, 0.01);
+}
+
+// "1:29.430" at/over a minute, "58.200" under. Always 3 decimal places.
+export function formatLapTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec - m * 60;
+  const ss = `${s < 10 ? '0' : ''}${s.toFixed(3)}`;
+  return m > 0 ? `${m}:${ss}` : s.toFixed(3);
+}
