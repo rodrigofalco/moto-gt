@@ -15,7 +15,6 @@ describe('full season integration', () => {
   it('completes 6 races, applies progression, and crowns a champion', () => {
     const rng = new RNG(2026);
     const season = createSeason('Me', PILOT_ROSTER[3], BRAND_ROSTER[2], rng);
-    const startPace = season.playerRider.skills.pace + season.playerRider.skills.cornering + season.playerRider.skills.consistency;
     let races = 0;
     while (!season.isSeasonComplete) {
       const track = season.calendar[season.currentRaceIndex];

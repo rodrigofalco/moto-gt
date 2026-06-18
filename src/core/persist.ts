@@ -30,8 +30,8 @@ export function loadJSON<T>(key: string, fallback: T): T {
 
 export function saveJSON(key: string, value: unknown): void {
   const wrapped = typeof value === 'object' && value !== null && 'version' in value
-    ? value
-    : { version: VERSION, ...value };
+     ? value
+     : { version: VERSION, ...(value as Record<string, unknown>) };
   safeSet(key, JSON.stringify(wrapped));
 }
 

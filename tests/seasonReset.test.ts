@@ -34,6 +34,10 @@ describe('P1.10 — multi-season reset', () => {
     career.player.rndPoints = 10;
     const bikeSpeed = career.player.bike.speed;
     const bikeHandling = career.player.bike.handling;
+    // Ensure player is NOT top-3 so promotion doesn't trigger (standings uses points)
+    career.player.points = 2;
+    career.player.positionCounts = new Array(10).fill(0);
+    career.player.positionCounts[9] = 6; // 10th place every race
 
        // Off-season clears the season
     runOffSeason(career);

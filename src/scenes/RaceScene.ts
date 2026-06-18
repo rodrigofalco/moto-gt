@@ -9,6 +9,7 @@ import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
 import { SoundEngine } from '../core/SoundEngine';
 import { saveCareer } from '../core/CareerStore';
+import { prizeFor } from '../core/Economy';
 import type { SeasonState, Risk, CareerState } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
@@ -336,8 +337,13 @@ export class RaceScene extends Phaser.Scene {
     const result = finalizeRace(run, run.rng);
     const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);
     applyRaceResult(this.sd.season, result);
-    if (this.career) saveCareer(this.career);
+     // Award prize money to career
+    if (this.career) {
+      const playerEntry = result.finishingOrder.find((e) => e.rider.isPlayer);
+      if (playerEntry) this.career.money += prizeFor(playerEntry.position);
+      saveCareer(this.career);
+       }
     const playerSummary = summaries.find((su) => su.riderId === 'player')!;
     this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary, career: this.career } as never);
-    }
+     }
 }
