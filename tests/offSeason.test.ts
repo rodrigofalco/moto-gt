@@ -42,15 +42,18 @@ describe('P1.7 — off-season report', () => {
     expect(report.playerFinish).toBeLessThanOrEqual(10);
        });
 
-  it('returns empty churn arrays', () => {
+  it('churns 1-2 riders and adds rookies, keeping field at 9', () => {
     const rng = new RNG(7);
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, rng);
     bootstrapSeason(career, rng);
+    const beforeCount = career.field.length;
     const report = runOffSeason(career, new RNG(102));
-    expect(report.retired).toEqual([]);
-    expect(report.rookies).toEqual([]);
-    expect(report.statChanges).toEqual([]);
-       });
+    expect(beforeCount).toBe(9);
+    expect(career.field.length).toBe(9);
+    expect(report.retired.length).toBeGreaterThanOrEqual(1);
+    expect(report.retired.length).toBeLessThanOrEqual(2);
+    expect(report.retired.length).toBe(report.rookies.length);
+         });
 });
 
 describe('P2.7 — aging', () => {

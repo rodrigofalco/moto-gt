@@ -76,16 +76,17 @@ describe('P1.10 — multi-season reset', () => {
     expect(career.tierId).toBe('rookie'); // unchanged
       });
 
-  it('preserves rider identity across seasons', () => {
+  it('preserves player identity and field size across seasons', () => {
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(888));
     bootstrapSeason(career, 3);
     const playerId = career.player.id;
-    const fieldIds = career.field.map((r) => r.id);
+    const beforeField = career.field.length;
 
     offSeason(career, new RNG(998));
     bootstrapSeason(career, 4);
 
     expect(career.player.id).toBe(playerId);
-    expect(career.field.map((r) => r.id)).toEqual(fieldIds);
-      });
+    expect(career.field.length).toBe(beforeField);
+    expect(career.field.length).toBe(9);
+       });
 });
