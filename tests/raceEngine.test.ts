@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { runRace, simulateRace, createRace, stepLap, finalizeRace, momentumNoise, hasDraftTow } from '../src/core/RaceEngine';
 import { RNG } from '../src/core/RNG';
-import { RACE_LAPS } from '../src/core/constants';
+import { RACE_LAPS, GRID_SPACING } from '../src/core/constants';
 import type { Rider, Track, SeasonState } from '../src/core/types';
 
 function mkRider(id: string, isPlayer: boolean, pace: number): Rider {
@@ -95,18 +95,54 @@ describe('momentum noise (AR1)', () => {
 
 describe('drafting tow (hasDraftTow)', () => {
   it('tows a trailing rider within range but not an isolated leader or a far-back rider', () => {
-    const progress = [10, 9.5, 3];           // r0 leader, r1 0.5 behind, r2 7 behind
+    const progress = [10, 9.5, 3];            // r0 leader, r1 0.5 behind, r2 7 behind
     const crashed = [false, false, false];
     expect(hasDraftTow(progress, crashed, 0)).toBe(false); // clear air ahead
-    expect(hasDraftTow(progress, crashed, 1)).toBe(true);  // within DRAFT_RANGE of r0
+    expect(hasDraftTow(progress, crashed, 1)).toBe(true);   // within DRAFT_RANGE of r0
     expect(hasDraftTow(progress, crashed, 2)).toBe(false); // out of range
-  });
+   });
   it('gives no tow at exactly equal progress (strict ahead)', () => {
     expect(hasDraftTow([5, 5], [false, false], 0)).toBe(false);
     expect(hasDraftTow([5, 5], [false, false], 1)).toBe(false);
-  });
+   });
   it('ignores crashed riders as tow providers and skips crashed receivers', () => {
     expect(hasDraftTow([10, 9.5], [false, true], 1)).toBe(false); // only rider ahead is crashed
     expect(hasDraftTow([9.5, 10], [true, false], 0)).toBe(false); // receiver crashed
-  });
+   });
+});
+
+describe('P3.2 — grid offset', () => {
+  it('front-row rider starts with more progress than back-row', () => {
+    const season = mkSeason();
+    const grid = ['ai0', 'ai1', 'ai2', 'ai3', 'ai4', 'ai5', 'ai6', 'ai7', 'ai8', 'player'];
+    const rng = new RNG(42);
+    const run = createRace(season, 'topSpeed', rng, grid);
+    const playerProg = run.states.find((s) => s.rider.id === 'player')!.progress;
+    const ai0Prog = run.states.find((s) => s.rider.id === 'ai0')!.progress;
+    expect(ai0Prog).toBeGreaterThan(playerProg);
+    expect(ai0Prog).toBe(10 * GRID_SPACING);
+    expect(playerProg).toBe(1 * GRID_SPACING);
+    });
+
+  it('grid is backward compatible — no grid = no offset', () => {
+    const season = mkSeason();
+    const rng = new RNG(42);
+    const run = createRace(season, 'topSpeed', rng);
+    expect(run.states.every((s) => s.progress === 0)).toBe(true);
+   });
+
+  it('grid position maps to correct offset', () => {
+    const season = mkSeason();
+    const field = [season.playerRider, ...season.aiRiders];
+    const grid = field.map((r) => r.id).reverse();
+    const rng = new RNG(42);
+    const run = createRace(season, 'topSpeed', rng, grid);
+    for (let i = 0; i < field.length; i++) {
+      const rider = field[i];
+      const state = run.states.find((s) => s.rider.id === rider.id)!;
+      const gridPos = grid.indexOf(rider.id);
+      const expected = (field.length - gridPos) * GRID_SPACING;
+      expect(state.progress).toBe(expected);
+      }
+    });
 });

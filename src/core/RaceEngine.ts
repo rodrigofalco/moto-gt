@@ -1,5 +1,5 @@
 import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION } from './constants';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION, GRID_SPACING } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
 import { aiSetup, aiRisk } from './AIDecision';
@@ -36,15 +36,24 @@ function compare(a: RiderState, b: RiderState, rng: RNG): number {
   return rng.nextFloat() - 0.5;
 }
 
-export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG): RaceRun {
+export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG, grid?: string[]): RaceRun {
   if (season.currentRaceIndex >= season.calendar.length) throw new Error('All races have been simulated.');
   const track = season.calendar[season.currentRaceIndex];
-  const states: RiderState[] = [season.playerRider, ...season.aiRiders].map((rider) => {
+  const field = [season.playerRider, ...season.aiRiders];
+  const fieldSize = field.length;
+  const states: RiderState[] = field.map((rider) => {
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
-    const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng); // player risk comes live from stepLap
+    const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng);
     const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
-    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress: 0, crashed: false, crashLap: 0, lastNoise: 0 };
-  });
+    let progress = 0;
+    if (grid) {
+      const gridPos = grid.indexOf(rider.id);
+      if (gridPos !== -1) {
+        progress = (fieldSize - gridPos) * GRID_SPACING;
+      }
+     }
+    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress, crashed: false, crashLap: 0, lastNoise: 0 };
+   });
   const meanPace = states.reduce((a, s) => a + s.basePace, 0) / states.length || 7;
   return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng };
 }
