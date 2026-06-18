@@ -3,6 +3,7 @@ import {
   PILOT_XP_BASE, PILOT_XP_PODIUM, PILOT_XP_WIN, PILOT_XP_PER_LEVEL,
   RND_BASE, RND_PODIUM, RND_WIN, STAT_MAX,
 } from './constants';
+import { pilotLevelCost, bikeUpgradeCost } from './CostCurve';
 
 export interface ProgressionSummary {
   riderId: string;
@@ -38,8 +39,10 @@ function weakestParam(bike: BikeParams): keyof BikeParams {
 
 export function investBikePoint(rider: Rider, param: keyof BikeParams): boolean {
   if (rider.rndPoints <= 0 || rider.bike[param] >= STAT_MAX) return false;
+  const cost = bikeUpgradeCost(rider.bike[param]);
+  if (rider.rndPoints < cost) return false;
   rider.bike[param] += 1;
-  rider.rndPoints -= 1;
+  rider.rndPoints -= cost;
   return true;
 }
 
@@ -50,17 +53,19 @@ export function applyProgression(riders: Rider[], result: RaceResult): Progressi
     const podium = pos <= 3;
     const win = pos === 1;
 
-    // Pilot XP + auto level-ups.
+      // Pilot XP + auto level-ups (diminishing returns via cost curve).
     rider.pilotXp += PILOT_XP_BASE + (podium ? PILOT_XP_PODIUM : 0) + (win ? PILOT_XP_WIN : 0);
     const emphasis = trackEmphasisFor(rider, result);
     const pilotLevels: (keyof PilotSkills)[] = [];
     while (rider.pilotXp >= PILOT_XP_PER_LEVEL) {
       const skill = pickSkillToLevel(rider.skills, emphasis);
       if (!skill) { rider.pilotXp = PILOT_XP_PER_LEVEL - 1; break; }
+      const cost = pilotLevelCost(rider.skills[skill]);
+      if (rider.pilotXp < cost) break;
       rider.skills[skill] += 1;
-      rider.pilotXp -= PILOT_XP_PER_LEVEL;
+      rider.pilotXp -= cost;
       pilotLevels.push(skill);
-    }
+     }
 
     // Bike R&D points.
     const rndEarned = RND_BASE + (podium ? RND_PODIUM : 0) + (win ? RND_WIN : 0);

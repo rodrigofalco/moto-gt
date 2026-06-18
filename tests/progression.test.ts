@@ -33,28 +33,37 @@ describe('Progression', () => {
     expect(player.bike.speed).toBe(5);        // unspent
   });
 
-  it('investBikePoint spends one point, capped at 10', () => {
+  it('investBikePoint spends points, respects cost curve and caps at 10', () => {
     const player = mkRider('player', true);
-    player.rndPoints = 1;
+    // cost at param 5 = Math.round(2 * (1 + 0.5 * 4)) = 6
+    player.rndPoints = 6;
     expect(investBikePoint(player, 'speed')).toBe(true);
     expect(player.bike.speed).toBe(6);
     expect(player.rndPoints).toBe(0);
-    expect(investBikePoint(player, 'speed')).toBe(false); // no points left
-  });
+    // param 6 costs Math.round(2 * (1 + 0.5 * 5)) = 7, can't afford
+    expect(investBikePoint(player, 'speed')).toBe(false);
+   });
 
   it('pilot auto-levels toward the raced track emphasis after enough XP', () => {
     const ai = mkRider('ai', false);
-    // 3 wins on a speed-heavy track => XP 3*(10+5+5)=60 => 2 level-ups, both to pace (speed axis).
+    ai.skills = { pace: 2, cornering: 5, consistency: 5 };
+       // cost at pace 2 = Math.round(25*(1+0.6*1)) = 40
+       // 3 wins => XP 3*20=60 => 1 level-up (cost 40), remaining XP 20
     const all = [ai];
     for (let i = 0; i < 3; i++) applyProgression(all, resultWith([ai]));
-    expect(ai.skills.pace).toBe(7); // +2
-  });
+    expect(ai.skills.pace).toBe(3); // +1
+    expect(ai.pilotXp).toBe(20);     // 60 - 40
+       });
 
   it('AI bikes auto-spend their R&D on the weakest param', () => {
     const ai = mkRider('ai', false);
     ai.bike = { speed: 8, handling: 3, acceleration: 8 };
-    applyProgression([ai], resultWith([ai])); // earns 4 points, all to handling (weakest)
-    expect(ai.bike.handling).toBe(7);
+     // earns 4 R&D points (base 2 + podium 1 + win 1), all to handling
+     // cost at handling 3 = Math.round(2*(1+0.5*2)) = 4, exactly 1 upgrade
+    applyProgression([ai], resultWith([ai]));
+    expect(ai.bike.handling).toBe(4);
     expect(ai.rndPoints).toBe(0);
-  });
+     // Next cost at handling 4 = Math.round(2*(1+0.5*3)) = 5, can't afford more
+    expect(ai.bike.handling).toBe(4);
+     });
 });
