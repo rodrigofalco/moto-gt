@@ -5,6 +5,7 @@ import { getStandings, getChampion } from '../core/Championship';
 import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
 import { SoundEngine } from '../core/SoundEngine';
+import { runOffSeason } from '../core/OffSeason';
 import type { SeasonState, RaceResult, Rider, CareerState } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
@@ -88,7 +89,14 @@ export class RaceResultScene extends Phaser.Scene {
 
     this.add.text(512, 372, 'Final Standings', { fontSize: '18px', color: '#f5c518' }).setOrigin(0.5);
     renderStandings(this, 400, 398, standings, { showGap: true });
-    new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'PLAY AGAIN', onClick: () => this.scene.start('MainMenuScene') });
+    new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'GO TO OFF-SEASON', onClick: () => {
+      if (this.career) {
+        const report = runOffSeason(this.career);
+        this.scene.start('OffSeasonScene', { career: this.career, report: report as never } as never);
+        } else {
+        this.scene.start('MainMenuScene');
+        }
+      } });
   }
 
   // Top-3 podium: 1st tallest (centre), 2nd left, 3rd right; medal-colored blocks with
