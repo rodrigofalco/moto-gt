@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { newCareer } from '../src/core/CareerStore';
 import { createSeasonForCareer } from '../src/core/factories/SeasonFactory';
 import { runOffSeason } from '../src/core/OffSeason';
@@ -40,17 +40,16 @@ describe('P2.4 — anti-cap regression', () => {
 
   it('some growth still happens', () => {
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(666));
-    const startPace = career.player.skills.pace;
-    const startHandling = career.player.bike.handling;
+    const startTotal = career.player.skills.pace + career.player.skills.cornering + career.player.skills.consistency;
 
     runSeason(career, 3);
     runOffSeason(career);
     runSeason(career, 4);
 
-       // At least some growth occurred
+        // At least some growth occurred
     expect(career.player.skills.pace + career.player.skills.cornering + career.player.skills.consistency)
-      .toBeGreaterThan(startPace + 5);
-    });
+       .toBeGreaterThan(startTotal + 1);
+      });
 
   it('growth is slower than before the cost curve', () => {
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(777));

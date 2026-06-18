@@ -14,9 +14,9 @@ describe('P2.1 — cost curves', () => {
       });
 
     it('returns specific values', () => {
-      expect(pilotLevelCost(1)).toBe(25);  // 25 * (1 + 0.6 * 0) = 25
-      expect(pilotLevelCost(2)).toBe(40);  // 25 * (1 + 0.6 * 1) = 40
-      expect(pilotLevelCost(5)).toBe(85);  // 25 * (1 + 0.6 * 4) = 85
+      expect(pilotLevelCost(1)).toBe(25);  // 25 * (1 + 0.0375 * 0)  = 25
+      expect(pilotLevelCost(2)).toBe(26);  // 25 * (1 + 0.0375 * 1)  = 25.9 → 26
+      expect(pilotLevelCost(5)).toBe(40);  // 25 * (1 + 0.0375 * 16) = 40
       });
     });
 

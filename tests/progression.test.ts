@@ -47,12 +47,12 @@ describe('Progression', () => {
   it('pilot auto-levels toward the raced track emphasis after enough XP', () => {
     const ai = mkRider('ai', false);
     ai.skills = { pace: 2, cornering: 5, consistency: 5 };
-       // cost at pace 2 = Math.round(25*(1+0.6*1)) = 40
-       // 3 wins => XP 3*20=60 => 1 level-up (cost 40), remaining XP 20
+       // Convex curve: cost at pace 2 = round(25*(1+0.0375*1)) = 26; at pace 3 = 29.
+       // 3 wins => XP 3*20=60 => 2 level-ups (26+29=55), remaining XP 5.
     const all = [ai];
     for (let i = 0; i < 3; i++) applyProgression(all, resultWith([ai]));
-    expect(ai.skills.pace).toBe(3); // +1
-    expect(ai.pilotXp).toBe(20);     // 60 - 40
+    expect(ai.skills.pace).toBe(4); // +2 (early levels are cheap)
+    expect(ai.pilotXp).toBe(5);      // 60 - 26 - 29
        });
 
   it('AI bikes auto-spend their R&D on the weakest param', () => {
