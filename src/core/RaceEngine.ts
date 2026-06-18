@@ -1,4 +1,4 @@
-import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot } from './types';
+import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot, Weather } from './types';
 import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION, GRID_SPACING } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
@@ -16,13 +16,14 @@ export interface RaceRun {
   raceIndex: number;
   track: Track;
   states: RiderState[];
-  lap: number;       // laps completed (0..RACE_LAPS)
-  meanPace: number;  // field-average basePace (compression reference; constant per race)
+  lap: number;        // laps completed (0..RACE_LAPS)
+  meanPace: number;   // field-average basePace (compression reference; constant per race)
   rng: RNG;
+  weather: Weather;   // weather for this race
 }
 
-function perLapCrashProb(risk: Risk, consistency: number, track: Track): number {
-  const whole = crashProbability(risk, consistency, track);
+function perLapCrashProb(risk: Risk, consistency: number, track: Track, weather: Weather): number {
+  const whole = crashProbability(risk, consistency, track, weather);
   return 1 - Math.pow(1 - whole, 1 / RACE_LAPS);
 }
 
@@ -39,23 +40,24 @@ function compare(a: RiderState, b: RiderState, rng: RNG): number {
 export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG, grid?: string[]): RaceRun {
   if (season.currentRaceIndex >= season.calendar.length) throw new Error('All races have been simulated.');
   const track = season.calendar[season.currentRaceIndex];
+  const weather = season.weatherByRace?.[season.currentRaceIndex] ?? 'dry';
   const field = [season.playerRider, ...season.aiRiders];
   const fieldSize = field.length;
   const states: RiderState[] = field.map((rider) => {
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
     const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng);
-    const axes = applySetup(baseAxes(rider.skills, rider.bike), setup);
+    const axes = applySetup(baseAxes(rider.skills, rider.bike), setup, weather);
     let progress = 0;
     if (grid) {
       const gridPos = grid.indexOf(rider.id);
       if (gridPos !== -1) {
         progress = (fieldSize - gridPos) * GRID_SPACING;
+       }
       }
-     }
     return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress, crashed: false, crashLap: 0, lastNoise: 0 };
-   });
+    });
   const meanPace = states.reduce((a, s) => a + s.basePace, 0) / states.length || 7;
-  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng };
+  return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng, weather };
 }
 
 // AR(1) momentum: blend carryover with fresh noise. Variance-preserving for the per-lap
@@ -83,7 +85,7 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
     // changing who finishes where (FIELD_COMPRESSION = 1 reproduces the raw spread).
     const dev = (s.basePace - run.meanPace) + PUSH_BONUS[risk] + s.lastNoise;
     s.progress += run.meanPace + FIELD_COMPRESSION * dev;
-    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track)) {
+    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track, run.weather)) {
       s.crashed = true;
       s.crashLap = run.lap;
     }

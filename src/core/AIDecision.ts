@@ -1,17 +1,18 @@
-import type { Rider, Setup, Risk, Track } from './types';
+import type { Rider, Setup, Risk, Track, Weather } from './types';
 import { SETUPS } from './constants';
 import type { RNG } from './RNG';
 
-export function dominantSetup(track: Track): Setup {
+export function dominantSetup(track: Track, weather: Weather = 'dry'): Setup {
   const w = track.weights;
+  if (weather === 'wet') return 'handling';
   if (w.speed >= w.cornering && w.speed >= w.acceleration) return 'topSpeed';
   if (w.cornering >= w.acceleration) return 'handling';
   return 'acceleration';
 }
 
-export function aiSetup(_rider: Rider, track: Track, rng: RNG): Setup {
-  if (rng.nextFloat() < 0.75) return dominantSetup(track);
-  return rng.pick(SETUPS);
+export function aiSetup(_rider: Rider, track: Track, rng: RNG, weather: Weather = 'dry'): Setup {
+  if (rng.nextFloat() < 0.75) return dominantSetup(track, weather);
+  return SETUPS[rng.nextInt(0, SETUPS.length - 1)];
 }
 
 export function aiRisk(rider: Rider, rng: RNG): Risk {

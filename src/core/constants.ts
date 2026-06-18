@@ -52,7 +52,8 @@ export const DRAFT_BONUS = 0.3;       // progress-points/lap tow for a rider wit
 // compression around the mean, so champion rates (balance) are unchanged. 1.0 = no
 // compression (raw spread); lower = tighter racing.
 export const FIELD_COMPRESSION = 0.35;
-export const GRID_SPACING = 0.15;  // progress units per grid position for qualifying offset
+export const WET_CRASH_MULT = 1.4;   // multiplier for crash probability in wet weather
+export const GRID_SPACING = 0.15;   // progress units per grid position for qualifying offset
 export const RACE_ANIM_SECONDS = 32;           // 1× ≈ 4s/lap; speed control scales it (continuous motion)
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
