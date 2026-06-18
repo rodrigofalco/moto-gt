@@ -36,5 +36,23 @@ describe('factories', () => {
   it('createSeason seeds lastRisk to medium', () => {
     const s = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(2));
     expect(s.lastRisk).toBe('medium');
-  });
+    });
+
+  it('weatherByRace has 6 entries matching calendar length', () => {
+    const s = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(2));
+    expect(s.weatherByRace).toHaveLength(6);
+    });
+
+  it('weather is deterministic per seed', () => {
+    const a = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(42));
+    const b = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(42));
+    expect(a.weatherByRace).toEqual(b.weatherByRace);
+    });
+
+  it('weather contains both dry and wet races', () => {
+    const s = createSeason('My Team', PILOT_ROSTER[1], BRAND_ROSTER[1], new RNG(7));
+    const weathers = s.weatherByRace!;
+    expect(weathers).toContain('dry');
+    expect(weathers).toContain('wet');
+    });
 });

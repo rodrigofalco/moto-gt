@@ -1,5 +1,6 @@
 export type Setup = 'topSpeed' | 'handling' | 'acceleration';
 export type Risk = 'low' | 'medium' | 'high';
+export type Weather = 'dry' | 'wet';
 
 export interface PilotSkills { pace: number; cornering: number; consistency: number; } // 1..10
 export interface BikeParams { speed: number; handling: number; acceleration: number; } // 1..10
@@ -43,12 +44,13 @@ export interface RaceResult {
 
 export interface SeasonState {
   playerRider: Rider;
-  aiRiders: Rider[];         // 9
-  calendar: Track[];         // 6
-  currentRaceIndex: number;  // 0..6
+  aiRiders: Rider[];          // 9
+  calendar: Track[];          // 6
+  currentRaceIndex: number;   // 0..6
   raceResults: RaceResult[];
   isSeasonComplete: boolean;
-  lastRisk?: Risk;           // player's last-used in-race order, carried between races
+  lastRisk?: Risk;            // player's last-used in-race order, carried between races
+  weatherByRace?: Weather[];  // per-race weather, seeded by RNG
 }
 
 export interface LapSnapshot {
