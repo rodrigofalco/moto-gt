@@ -8,14 +8,15 @@ import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/ra
 import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
 import { SoundEngine } from '../core/SoundEngine';
-import type { SeasonState, Risk } from '../core/types';
+import { saveCareer } from '../core/CareerStore';
+import type { SeasonState, Risk, CareerState } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
 const ORDER: { risk: Risk; label: string }[] = [
-  { risk: 'low', label: 'Settle' }, { risk: 'medium', label: 'Defend' }, { risk: 'high', label: 'Attack' },
+   { risk: 'low', label: 'Settle' }, { risk: 'medium', label: 'Defend' }, { risk: 'high', label: 'Attack' },
 ];
 
-interface SceneData { season: SeasonState; run: RaceRun; }
+interface SceneData { season: SeasonState; run: RaceRun; career?: CareerState; }
 interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; }
 
 export class RaceScene extends Phaser.Scene {
@@ -47,8 +48,9 @@ export class RaceScene extends Phaser.Scene {
   private flText!: Phaser.GameObjects.Text;               // fastest-lap banner
   private youText!: Phaser.GameObjects.Text;              // "YOU" label that follows the player dot
   private prevPlayerPos = -1;
-   private soundEngine!: SoundEngine;
-   private muteBtn!: Phaser.GameObjects.Text;
+  private soundEngine!: SoundEngine;
+  private muteBtn!: Phaser.GameObjects.Text;
+  private career: CareerState | null = null;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
@@ -57,7 +59,8 @@ export class RaceScene extends Phaser.Scene {
     this.lastLap = new Map(); this.bestLap = new Map(); this.raceTime = new Map(); this.fastest = null;
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = data.season.lastRisk ?? 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
-  }
+    this.career = data.career ?? null;
+   }
 
   create(): void {
     const run = this.sd.run;
@@ -333,7 +336,8 @@ export class RaceScene extends Phaser.Scene {
     const result = finalizeRace(run, run.rng);
     const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);
     applyRaceResult(this.sd.season, result);
+    if (this.career) saveCareer(this.career);
     const playerSummary = summaries.find((su) => su.riderId === 'player')!;
-    this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary });
-   }
+    this.scene.start('RaceResultScene', { season: this.sd.season, result, playerSummary, career: this.career } as never);
+    }
 }

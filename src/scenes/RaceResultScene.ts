@@ -5,7 +5,7 @@ import { getStandings, getChampion } from '../core/Championship';
 import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
 import { SoundEngine } from '../core/SoundEngine';
-import type { SeasonState, RaceResult, Rider } from '../core/types';
+import type { SeasonState, RaceResult, Rider, CareerState } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
 const SETUP_SHORT: Record<string, string> = { topSpeed: 'TS', handling: 'HN', acceleration: 'AC' };
@@ -15,11 +15,13 @@ export class RaceResultScene extends Phaser.Scene {
   private season!: SeasonState;
   private result!: RaceResult;
   private playerSummary!: ProgressionSummary;
+  private career: CareerState | null = null;
 
   constructor() { super('RaceResultScene'); }
-  init(data: { season: SeasonState; result: RaceResult; playerSummary: ProgressionSummary }): void {
+  init(data: { season: SeasonState; result: RaceResult; playerSummary: ProgressionSummary; career?: CareerState }): void {
     this.season = data.season; this.result = data.result; this.playerSummary = data.playerSummary;
-  }
+    this.career = data.career ?? null;
+    }
 
   create(): void {
     const sound = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
@@ -46,7 +48,10 @@ export class RaceResultScene extends Phaser.Scene {
     this.add.text(620, 60, 'Standings', { fontSize: '20px', color: '#f5c518' });
     this.renderStandingsWithArrows(620, 90);
 
-    new Button(this, { x: 512, y: 700, width: 280, height: 56, label: 'NEXT RACE', onClick: () => this.scene.start('SeasonScene', { season: this.season }) });
+    new Button(this, { x: 512, y: 700, width: 280, height: 56, label: 'NEXT RACE', onClick: () => {
+      if (this.career) this.scene.start('SeasonScene', { season: this.season, career: this.career });
+      else this.scene.start('SeasonScene', { season: this.season });
+     } });
   }
 
   // Championship standings with ▲/▼/— vs the order before this race.
