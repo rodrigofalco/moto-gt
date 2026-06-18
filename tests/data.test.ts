@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { PILOT_ROSTER } from '../src/data/pilots';
+import { PILOT_ROSTER, AI_EXTRA_NAMES } from '../src/data/pilots';
 import { BRAND_ROSTER } from '../src/data/brands';
 import { TRACK_BANK } from '../src/data/tracks';
+import { RIDER_NAMES } from '../src/data/names';
 
 describe('data rosters', () => {
   it('has 6 pilots with in-range skills and unique ids', () => {
@@ -30,6 +31,19 @@ describe('data rosters', () => {
     for (const t of TRACK_BANK) {
       const sum = t.weights.speed + t.weights.cornering + t.weights.acceleration;
       expect(sum).toBeCloseTo(1.0, 5);
-    }
-  });
+     }
+    });
+
+  it('has at least 40 unique rider names with no duplicates', () => {
+    const allNames = [...RIDER_NAMES, ...AI_EXTRA_NAMES];
+    expect(allNames.length).toBeGreaterThanOrEqual(40);
+    const unique = new Set(allNames);
+    expect(unique.size).toBe(allNames.length);
+    });
+
+  it('RIDER_NAMES alone has at least 40 entries', () => {
+    expect(RIDER_NAMES.length).toBeGreaterThanOrEqual(40);
+    const unique = new Set(RIDER_NAMES);
+    expect(unique.size).toBe(RIDER_NAMES.length);
+    });
 });
