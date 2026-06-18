@@ -59,3 +59,24 @@ export interface RaceTimeline {
   laps: LapSnapshot[];
   totalLaps: number;
 }
+
+export interface Tier {
+  id: string;
+  name: string;
+  aiStatBonus: number;
+  order: number;
+}
+
+export interface CareerState {
+  version: number;
+  team: string;
+  pilotArchetypeId: string;
+  brandId: string;
+  tierId: string;
+  seasonNumber: number;
+  money: number;
+  reputation: number;
+  player: Rider;
+  field: Rider[];
+  season: SeasonState | null;
+}
