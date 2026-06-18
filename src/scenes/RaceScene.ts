@@ -65,7 +65,9 @@ export class RaceScene extends Phaser.Scene {
 
   create(): void {
     const run = this.sd.run;
-    this.add.text(OX, 28, `Race Day — ${run.track.name}`, { fontSize: '24px', color: '#f5c518' });
+    const weather = run.weather;
+    const weatherEmoji = weather === 'wet' ? '🌧️' : '☀️';
+    this.add.text(OX, 28, `Race Day — ${run.track.name} ${weatherEmoji}`, { fontSize: '24px', color: '#f5c518' });
 
     this.path = buildPath(TRACK_LAYOUTS[run.track.id].points);
     this.drawTrack();

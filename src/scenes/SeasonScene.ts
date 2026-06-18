@@ -37,14 +37,17 @@ export class SeasonScene extends Phaser.Scene {
     const idx = this.season.currentRaceIndex;
     const track = this.season.calendar[idx];
     this.setup = recommendedSetup(track.weights);
-    this.add.text(40, 24, `Race ${idx + 1} of ${this.season.calendar.length} - ${track.name}`, { fontSize: '24px', color: '#f5c518' });
+    const weather = this.season.weatherByRace?.[idx] ?? 'dry';
+    const weatherEmoji = weather === 'wet' ? '🌧️' : '☀️';
+    this.add.text(40, 24, `Race ${idx + 1} of ${this.season.calendar.length} - ${track.name} ${weatherEmoji}`, { fontSize: '24px', color: '#f5c518' });
     this.add.text(40, 60, `Track focus   Speed ${track.weights.speed.toFixed(2)}   Cornering ${track.weights.cornering.toFixed(2)}   Accel ${track.weights.acceleration.toFixed(2)}`, { fontSize: '15px', color: '#94a3b8' });
     const HINT: Record<Setup, string> = {
       topSpeed: 'Power track -> Top Speed setup favored',
       handling: 'Technical track -> Handling setup favored',
       acceleration: 'Stop-go track -> Acceleration setup favored',
-    };
-    this.add.text(40, 84, HINT[this.setup], { fontSize: '15px', color: '#00e5ff' });
+     };
+    const wetHint = weather === 'wet' ? ' (Wet conditions — Handling is more valuable)' : '';
+    this.add.text(40, 84, HINT[this.setup] + wetHint, { fontSize: '15px', color: '#00e5ff' });
     const s = this.season.playerRider.skills;
     this.add.text(40, 108, `Pilot   Pace ${s.pace}   Cornering ${s.cornering}   Consistency ${s.consistency}`, { fontSize: '16px', color: '#e0e0e0' });
     this.bikeText = this.add.text(40, 138, '', { fontSize: '16px', color: '#e0e0e0' });
