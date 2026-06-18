@@ -91,3 +91,7 @@ export interface CareerState {
   field: Rider[];
   season: SeasonState | null;
 }
+
+export interface QualifyingResult {
+  gridOrder: string[];  // riderId array, fastest first
+}
