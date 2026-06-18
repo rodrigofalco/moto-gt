@@ -17,7 +17,7 @@ const ORDER: { risk: Risk; label: string }[] = [
    { risk: 'low', label: 'Settle' }, { risk: 'medium', label: 'Defend' }, { risk: 'high', label: 'Attack' },
 ];
 
-interface SceneData { season: SeasonState; run: RaceRun; career?: CareerState; }
+interface SceneData { season: SeasonState; run: RaceRun; career?: CareerState; grid?: string[]; }
 interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; }
 
 export class RaceScene extends Phaser.Scene {
@@ -73,8 +73,9 @@ export class RaceScene extends Phaser.Scene {
 
     this.progressPerLoop = run.states.reduce((a, s) => a + s.basePace, 0) / run.states.length || 7;
 
-    const grid = [this.sd.season.playerRider, ...this.sd.season.aiRiders];
-    grid.forEach((r, i) => this.numbers.set(r.id, i + 1));
+     // Wire grid order: number = starting position, dot order = grid
+    const grid = this.sd.grid ?? [this.sd.season.playerRider, ...this.sd.season.aiRiders].map((r) => r.id);
+    grid.forEach((riderId, i) => this.numbers.set(riderId, i + 1));
 
     for (const s of run.states) {
       const r = s.rider;

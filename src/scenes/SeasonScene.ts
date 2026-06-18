@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
 import { createRace } from '../core/RaceEngine';
+import { runQualifying } from '../core/Qualifying';
 import { getStandings } from '../core/Championship';
 import { investBikePoint } from '../core/Progression';
 import { bikeUpgradeCost, RND_POINT_COST } from '../core/Economy';
@@ -85,6 +86,8 @@ export class SeasonScene extends Phaser.Scene {
     this.add.text(720, 64, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontSize: '14px', color: '#94a3b8' });
     this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
     renderStandings(this, 720, 120, getStandings(this.season), { showGap: true });
+    this.add.text(720, 240, 'Starting Grid', { fontSize: '18px', color: '#f5c518' });
+    this.showStartingGrid();
     new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => { sound.playClick(); this.simulate(); } });
   }
 
@@ -105,9 +108,20 @@ export class SeasonScene extends Phaser.Scene {
   private refreshSelectors(): void {
     SETUPS.forEach((st) => this.setupBoxes[st].setFillStyle(st === this.setup ? 0x0f3460 : 0x16213e).setStrokeStyle(2, st === this.setup ? 0xf5c518 : 0x0f3460));
   }
-  private simulate(): void {
-    const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
-    const run = createRace(this.season, this.setup, rng);
-    this.scene.start('RaceScene', { season: this.season, run, career: this.career } as never);
-  }
-}
+   private simulate(): void {
+     const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
+     const field = [this.season.playerRider, ...this.season.aiRiders];
+     const qualifying = runQualifying(field, this.season.calendar[this.season.currentRaceIndex], rng);
+     const run = createRace(this.season, this.setup, rng, qualifying.gridOrder);
+     this.scene.start('RaceScene', { season: this.season, run, career: this.career, grid: qualifying.gridOrder } as never);
+    }
+
+   private showStartingGrid(): void {
+     const field = [this.season.playerRider, ...this.season.aiRiders];
+     const lines = field.map((r, i) => {
+       const tag = r.isPlayer ? '> ' : '  ';
+       return `${tag}${i + 1}. ${r.name}`;
+      });
+     this.add.text(720, 264, lines.join('\n'), { fontSize: '12px', color: '#e0e0e0' }).setOrigin(0, 0);
+    }
+ }
