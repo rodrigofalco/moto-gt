@@ -60,6 +60,16 @@ export interface RaceTimeline {
   totalLaps: number;
 }
 
+export interface OffSeasonReport {
+  previousSeason: number;
+  playerFinish: number;
+  champion: string;
+  promoted: boolean;
+  retired: string[];
+  rookies: string[];
+  statChanges: { riderId: string; note: string }[];
+}
+
 export interface Tier {
   id: string;
   name: string;
