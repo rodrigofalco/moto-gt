@@ -5,7 +5,7 @@ import { createSeason } from '../core/factories/SeasonFactory';
 import { RNG } from '../core/RNG';
 import { PILOT_ROSTER } from '../data/pilots';
 import { BRAND_ROSTER } from '../data/brands';
-import { hasCareer, loadCareer } from '../core/CareerStore';
+import { hasCareer, loadCareer, newCareer, saveCareer } from '../core/CareerStore';
 import type { PilotArchetype, Brand } from '../core/types';
 
 export class MainMenuScene extends Phaser.Scene {
@@ -126,7 +126,10 @@ export class MainMenuScene extends Phaser.Scene {
 
   private start(): void {
     if (!this.pilot || !this.brand) return;
-    const season = createSeason(this.team.trim(), this.pilot, this.brand, new RNG(Date.now() >>> 0));
-    this.scene.start('SeasonScene', { season });
-  }
+    const career = newCareer(this.team.trim(), this.pilot.id, this.brand.id, new RNG(Date.now() >>> 0));
+    const season = createSeason(career.team, PILOT_ROSTER.find((p) => p.id === career.pilotArchetypeId)!, BRAND_ROSTER.find((b) => b.id === career.brandId)!, new RNG((Date.now() + 1) >>> 0));
+    career.season = season;
+    saveCareer(career);
+    this.scene.start('SeasonScene', { season: season, career } as never);
+   }
 }

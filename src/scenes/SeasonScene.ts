@@ -8,19 +8,23 @@ import { RNG } from '../core/RNG';
 import { SETUPS } from '../core/constants';
 import { recommendedSetup } from '../core/Advice';
 import { SoundEngine } from '../core/SoundEngine';
-import type { SeasonState, Setup, BikeParams } from '../core/types';
+import type { SeasonState, Setup, BikeParams, CareerState } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
 
 export class SeasonScene extends Phaser.Scene {
   private season!: SeasonState;
+  private career!: CareerState;
   private setup!: Setup;
   private setupBoxes: Record<Setup, Phaser.GameObjects.Rectangle> = {} as never;
   private bikeText!: Phaser.GameObjects.Text;
   private rndText!: Phaser.GameObjects.Text;
 
   constructor() { super('SeasonScene'); }
-  init(data: { season: SeasonState }): void { this.season = data.season; }
+  init(data: { season: SeasonState; career?: CareerState }): void {
+    this.season = data.season;
+    this.career = data.career ?? { player: data.season.playerRider, field: data.season.aiRiders } as CareerState;
+  }
 
   create(): void {
     const sound = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
@@ -82,6 +86,6 @@ export class SeasonScene extends Phaser.Scene {
   private simulate(): void {
     const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
     const run = createRace(this.season, this.setup, rng);
-    this.scene.start('RaceScene', { season: this.season, run });
-  }
+    this.scene.start('RaceScene', { season: this.season, run, career: this.career } as never);
+   }
 }
