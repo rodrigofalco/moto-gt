@@ -26,7 +26,7 @@ describe('P2.4 — anti-cap regression', () => {
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(555));
        // Season 1
     runSeason(career, 1);
-    runOffSeason(career);
+    runOffSeason(career, new RNG(10));
        // Season 2
     runSeason(career, 2);
 
@@ -43,7 +43,7 @@ describe('P2.4 — anti-cap regression', () => {
     const startTotal = career.player.skills.pace + career.player.skills.cornering + career.player.skills.consistency;
 
     runSeason(career, 3);
-    runOffSeason(career);
+    runOffSeason(career, new RNG(20));
     runSeason(career, 4);
 
         // At least some growth occurred
@@ -57,8 +57,8 @@ describe('P2.4 — anti-cap regression', () => {
         // Run 4 seasons
     for (let s = 1; s <= 4; s++) {
       runSeason(career, s);
-      runOffSeason(career);
-        }
+      runOffSeason(career, new RNG(s + 30));
+         }
         // After 4 seasons, total skill should be < 30 (not maxed out)
     const endTotal = career.player.skills.pace + career.player.skills.cornering + career.player.skills.consistency;
     expect(endTotal).toBeLessThan(30);

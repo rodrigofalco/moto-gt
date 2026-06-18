@@ -7,10 +7,10 @@ import type { Rider, Track, SeasonState } from '../src/core/types';
 function mkRider(id: string, isPlayer: boolean, pace: number): Rider {
   return {
     id, name: id, team: 'T', isPlayer, brandId: 'titan',
-    skills: { pace, cornering: 5, consistency: 5 },
+    age: 25, skills: { pace, cornering: 5, consistency: 5 },
     bike: { speed: pace, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+   };
 }
 const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.5, cornering: 0.3, acceleration: 0.2 } };
 function mkSeason(): SeasonState {

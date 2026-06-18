@@ -6,6 +6,7 @@ import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
 import { SoundEngine } from '../core/SoundEngine';
 import { runOffSeason } from '../core/OffSeason';
+import { RNG } from '../core/RNG';
 import type { SeasonState, RaceResult, Rider, CareerState } from '../core/types';
 import type { ProgressionSummary } from '../core/Progression';
 
@@ -91,7 +92,8 @@ export class RaceResultScene extends Phaser.Scene {
     renderStandings(this, 400, 398, standings, { showGap: true });
     new Button(this, { x: 512, y: 712, width: 280, height: 52, label: 'GO TO OFF-SEASON', onClick: () => {
       if (this.career) {
-        const report = runOffSeason(this.career);
+        const rng = new RNG((Date.now() ^ this.season.currentRaceIndex * 2654435761) >>> 0);
+        const report = runOffSeason(this.career, rng);
         this.scene.start('OffSeasonScene', { career: this.career, report: report as never } as never);
         } else {
         this.scene.start('MainMenuScene');

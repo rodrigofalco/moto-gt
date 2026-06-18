@@ -16,8 +16,12 @@ function bootstrapSeason(career: ReturnType<typeof newCareer>, seed: number): vo
     const result = simulateRace(season, 'topSpeed', 'medium', new RNG(seed + i + 100));
     applyProgression([season.playerRider, ...season.aiRiders], result);
     applyRaceResult(season, result);
-       }
+        }
   career.season = season;
+}
+
+function offSeason(career: ReturnType<typeof newCareer>, rng: RNG): void {
+  runOffSeason(career, rng);
 }
 
 describe('P1.10 — multi-season reset', () => {
@@ -39,8 +43,8 @@ describe('P1.10 — multi-season reset', () => {
     career.player.positionCounts = new Array(10).fill(0);
     career.player.positionCounts[9] = 6; // 10th place every race
 
-       // Off-season clears the season
-    runOffSeason(career);
+        // Off-season clears the season
+    offSeason(career, new RNG(999));
     expect(career.season).toBeNull();
     expect(career.seasonNumber).toBe(2);
 
@@ -78,7 +82,7 @@ describe('P1.10 — multi-season reset', () => {
     const playerId = career.player.id;
     const fieldIds = career.field.map((r) => r.id);
 
-    runOffSeason(career);
+    offSeason(career, new RNG(998));
     bootstrapSeason(career, 4);
 
     expect(career.player.id).toBe(playerId);

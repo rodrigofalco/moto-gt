@@ -9,10 +9,10 @@ const track: Track = { id: 't', name: 'T', location: 'X', weights: { speed: 0.8,
 function mkRider(id: string, isPlayer: boolean): Rider {
   return {
     id, name: id, team: 'T', isPlayer, brandId: 'titan',
-    skills: { pace: 5, cornering: 5, consistency: 5 },
+    age: 25, skills: { pace: 5, cornering: 5, consistency: 5 },
     bike: { speed: 5, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+   };
 }
 
 function resultWith(order: Rider[]): RaceResult {

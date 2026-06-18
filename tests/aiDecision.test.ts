@@ -9,10 +9,10 @@ const stopGo: Track = { id: 's', name: 'S', location: 'X', weights: { speed: 0.3
 function rider(consistency: number): Rider {
   return {
     id: 'ai', name: 'AI', team: 'T', isPlayer: false, brandId: 'titan',
-    skills: { pace: 5, cornering: 5, consistency },
+    age: 25, skills: { pace: 5, cornering: 5, consistency },
     bike: { speed: 5, handling: 5, acceleration: 5 },
     pilotXp: 0, rndPoints: 0, points: 0, positionCounts: new Array(10).fill(0),
-  };
+   };
 }
 
 describe('AIDecision', () => {

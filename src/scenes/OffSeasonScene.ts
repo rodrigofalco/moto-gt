@@ -14,8 +14,9 @@ export class OffSeasonScene extends Phaser.Scene {
 
   init(data: { career: CareerState }): void {
     this.career = data.career;
-    this.report = runOffSeason(this.career);
-    }
+    const rng = new RNG((Date.now() ^ this.career.seasonNumber) >>> 0);
+    this.report = runOffSeason(this.career, rng);
+     }
 
   create(): void {
     this.add.text(512, 36, 'OFF-SEASON REPORT', { fontSize: '32px', color: '#f5c518' }).setOrigin(0.5);

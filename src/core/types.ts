@@ -15,13 +15,14 @@ export interface Rider {
   name: string;
   team: string;
   isPlayer: boolean;
-  brandId: string;           // bike brand (drives race-day dot color)
-  skills: PilotSkills;       // evolves automatically (pilot XP)
-  bike: BikeParams;          // evolves via R&D investment
-  pilotXp: number;           // accumulated XP toward auto level-ups
-  rndPoints: number;         // unspent bike development points
+  brandId: string;            // bike brand (drives race-day dot color)
+  age: number;                // incremented each off-season
+  skills: PilotSkills;        // evolves automatically (pilot XP)
+  bike: BikeParams;           // evolves via R&D investment
+  pilotXp: number;            // accumulated XP toward auto level-ups
+  rndPoints: number;          // unspent bike development points
   points: number;
-  positionCounts: number[];  // length 10, countback tiebreak
+  positionCounts: number[];   // length 10, countback tiebreak
 }
 
 export interface RaceEntry {
