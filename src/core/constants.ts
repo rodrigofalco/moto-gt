@@ -1,4 +1,4 @@
-import type { Setup, Risk } from './types';
+import type { Setup, Risk, TireCompound } from './types';
 
 export const SEASON_RACE_COUNT = 6;
 export const GRID_SIZE = 10;
@@ -71,3 +71,12 @@ export const BRAND_COLORS: Record<string, number> = {
   titan: 0xcfd8dc,    // silver
   vortex: 0xff9800,   // orange
 };
+
+// Tire compounds
+export const TIRE_COMPOUNDS: Record<TireCompound, { grip: number; durability: number; label: string; color: number }> = {
+  soft:             { grip: 1.15, durability: 3.0, label: 'Soft',   color: 0xff0000 },
+  medium:         { grip: 1.05, durability: 5.0, label: 'Medium',  color: 0xffffff },
+  hard:             { grip: 1.00, durability: 8.0, label: 'Hard',   color: 0xffaa00 },
+};
+export const TIRE_WEAR_PER_LAP_BASE = 1.5;
+export const TIRE_COMPOUNDS_LIST: readonly TireCompound[] = ['soft', 'medium', 'hard'];

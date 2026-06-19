@@ -5,16 +5,16 @@ import { TRACK_BANK } from '../src/data/tracks';
 import { RIDER_NAMES } from '../src/data/names';
 
 describe('data rosters', () => {
-  it('has 6 pilots with in-range skills and unique ids', () => {
-    expect(PILOT_ROSTER).toHaveLength(6);
-    expect(new Set(PILOT_ROSTER.map((p) => p.id)).size).toBe(6);
+  it('has 18 pilots with in-range skills and unique ids', () => {
+    expect(PILOT_ROSTER).toHaveLength(18);
+    expect(new Set(PILOT_ROSTER.map((p) => p.id)).size).toBe(18);
     for (const p of PILOT_ROSTER) {
       for (const v of [p.skills.pace, p.skills.cornering, p.skills.consistency]) {
         expect(v).toBeGreaterThanOrEqual(1);
         expect(v).toBeLessThanOrEqual(10);
+       }
       }
-    }
-  });
+    });
 
   it('has 4 brands with in-range params', () => {
     expect(BRAND_ROSTER).toHaveLength(4);

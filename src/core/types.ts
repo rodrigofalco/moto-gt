@@ -1,6 +1,7 @@
 export type Setup = 'topSpeed' | 'handling' | 'acceleration';
 export type Risk = 'low' | 'medium' | 'high';
 export type Weather = 'dry' | 'wet';
+export type TireCompound = 'soft' | 'medium' | 'hard';
 
 export interface PilotSkills { pace: number; cornering: number; consistency: number; } // 1..10
 export interface BikeParams { speed: number; handling: number; acceleration: number; } // 1..10
@@ -51,6 +52,7 @@ export interface SeasonState {
   isSeasonComplete: boolean;
   lastRisk?: Risk;            // player's last-used in-race order, carried between races
   weatherByRace?: Weather[];  // per-race weather, seeded by RNG
+  lastCompound?: TireCompound;  // player tire compound, carried
 }
 
 export interface LapSnapshot {
@@ -96,4 +98,38 @@ export interface CareerState {
 
 export interface QualifyingResult {
   gridOrder: string[];  // riderId array, fastest first
+}
+
+// Tire params
+export interface TireParams {
+  compound: TireCompound;
+  wear: number;         // 0-100
+  grip: number;         // effective grip multiplier
+}
+
+// Commentary
+export type CommentaryType = 'overtake' | 'crash' | 'lead_change' | 'fastest_lap' | 'gap' | 'start' | 'finish' | 'battle';
+
+export interface CommentaryEvent {
+  lap: number;
+  text: string;
+  type: CommentaryType;
+}
+
+export interface RaceSnapshot {
+  lap: number;
+  totalLaps: number;
+  positions: Map<string, number>;
+  riders: Array<{ id: string; name: string }>;
+  crashed: Set<string>;
+  fastestLap: { id: string; time: string } | null;
+  tireWear: Map<string, number>;
+  overtookBy: Map<string, string>;
+  overtakeBy: Map<string, string>;
+}
+
+// Career continuation
+export interface SeasonLoadData extends SeasonState {
+  _savedAt?: number;
+  _careerStats?: Record<string, number>;
 }

@@ -63,6 +63,6 @@ describe('balance sweep', () => {
     const report = lines.join('\n');
     console.log('\n' + report);
     writeFileSync('/tmp/sweep-report.txt', report);
-    expect(rows.length).toBe(24);
+    expect(rows.length).toBe(72);
   });
 });
