@@ -44,12 +44,12 @@ export class MainMenuScene extends Phaser.Scene {
    }
 
   private createSelectionUI(hidden: boolean): Phaser.GameObjects.Container {
-    const group = this.add.container(0, 220);
+    const group = this.add.container(0, 140);
 
     this.add.text(80, 0, 'Choose your pilot', { fontSize: '18px', color: '#e0e0e0' });
     PILOT_ROSTER.forEach((p, i) => {
       const card = new Card(this, {
-        x: 160 + (i % 3) * 235, y: 0 + Math.floor(i / 3) * 150, width: 220, height: 130,
+        x: 120 + (i % 4) * 210, y: 35 + Math.floor(i / 4) * 105, width: 200, height: 90,
         title: p.name, subtitle: p.nickname,
         stats: [
           { label: 'Pace', value: p.skills.pace },
@@ -62,10 +62,10 @@ export class MainMenuScene extends Phaser.Scene {
       group.add(card);
      });
 
-    this.add.text(80, 510, 'Choose your bike', { fontSize: '18px', color: '#e0e0e0' });
+    this.add.text(80, 700, 'Choose your bike', { fontSize: '18px', color: '#e0e0e0' });
     BRAND_ROSTER.forEach((b, i) => {
       const card = new Card(this, {
-        x: 160 + i * 235, y: 510 + 115, width: 220, height: 120,
+        x: 160 + i * 235, y: 700 + 90, width: 220, height: 100,
         title: b.name,
         stats: [
           { label: 'Speed', value: b.params.speed },
@@ -78,7 +78,8 @@ export class MainMenuScene extends Phaser.Scene {
       group.add(card);
      });
 
-    new Button(this, { x: 512, y: 725, width: 280, height: 54, label: 'START SEASON', onClick: () => this.start() });
+    this.startButton = new Button(this, { x: 512, y: 1050, width: 280, height: 40, label: 'START SEASON', onClick: () => this.start() });
+    this.startButton.setEnabled(false);
 
     if (hidden) group.setVisible(false);
     return group;
