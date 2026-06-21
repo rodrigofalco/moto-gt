@@ -1,11 +1,19 @@
-# MotoGT — Development Status (2026-06-19)
+# MotoGT — Development Status (2026-06-21)
 
 ## Current State
-- **Branch:** `main` — clean, all features merged
+- **Branch:** `main` — clean, all changes committed
 - **Game:** 1024×1100 viewport, scalable via Phaser FIT
 - **Tests:** 27 files, 136 passing ✅
 - **Build:** ✅ `npm run build` → 1.4MB bundle
 - **Dev:** `npm run dev` → http://localhost:5173/
+
+## Latest Session Notes
+- V2 overnight polish pass committed (`feat(v2)`): unique AI names, finish line, overtake flash, race legend, result arrows, season podium, hub track hints.
+- Project infrastructure committed (`chore(project)`): `AGENTS.md`, `.pi/` config, `docs/`, screenshot helpers, verification tools, updated `.gitignore`.
+- **Balance decisions:**
+  - **P1 (accel = (bike + pilot.pace) / 2)** was already present in the codebase from an earlier commit.
+  - **Crash tuning applied:** `BASE_CRASH` bumped ~1.4× (0.028/0.084/0.224 → 0.039/0.118/0.314) to restore ~9–10% player crash rate.
+  - **Full pilot-roster spread is wide** (Drift Prince ~64% down to Ice Rider ~8%). Brand balance is excellent (36–38% each). **Decision:** accept the pilot spread as intentional roster flavor/difficulty; the formal three-reference-build harness remains green.
 
 ## Implemented Features
 
