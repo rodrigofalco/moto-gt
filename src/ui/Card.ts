@@ -32,18 +32,22 @@ export class Card extends Phaser.GameObjects.Container {
     const titleText = scene.add.text(-opts.width / 2 + 12, -opts.height / 2 + 10, opts.title, { fontFamily: THEME.fontFamily, fontSize: '18px', color: '#ffffff' });
     this.add(titleText);
     if (opts.subtitle) {
-      this.add(scene.add.text(-opts.width / 2 + 12, -opts.height / 2 + 34, opts.subtitle, {
+      this.add(scene.add.text(-opts.width / 2 + 12, -opts.height / 2 + 32, opts.subtitle, {
         fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.muted,
       }));
     }
+    // Stat rows: start below the title/subtitle and space so all rows fit inside the card.
+    const hasSub = !!opts.subtitle;
+    const statStart = -opts.height / 2 + (hasSub ? 54 : 46);
+    const statGap = 20;
     opts.stats.forEach((s, i) => {
-      const ry = -opts.height / 2 + 60 + i * 22;
+      const ry = statStart + i * statGap;
       this.add(scene.add.text(-opts.width / 2 + 12, ry, s.label, {
         fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.text,
-      }));
-      this.add(scene.add.text(opts.width / 2 - 28, ry, String(s.value), {
+      }).setOrigin(0, 0.5));
+      this.add(scene.add.text(opts.width / 2 - 14, ry, String(s.value), {
         fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold,
-      }));
+      }).setOrigin(1, 0.5));
     });
 
     this.setSize(opts.width, opts.height);

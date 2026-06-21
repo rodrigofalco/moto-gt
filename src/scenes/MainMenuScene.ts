@@ -66,10 +66,24 @@ export class MainMenuScene extends Phaser.Scene {
   private createSelectionUI(hidden: boolean): Phaser.GameObjects.Container {
     const group = this.add.container(0, 140);
 
+    // Grid geometry aligned to the 864px-wide section bars (x: 80..944).
+    const cols = 4;
+    const cardW = 204, cardH = 112, gap = 16;
+    const stride = cardW + gap;           // 220
+    const left = 80 + cardW / 2;           // 182 — first column center, aligns with bar left edge
+
     this.drawSectionBar(group, 80, 0, 'SELECT PILOT');
     PILOT_ROSTER.forEach((p, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      // Center the leftover cards on the final (partial) row so it looks balanced.
+      const fullRows = Math.floor(PILOT_ROSTER.length / cols);
+      const leftover = PILOT_ROSTER.length - fullRows * cols;
+      const rowOffset = row === fullRows && leftover > 0
+        ? ((cols - leftover) / 2) * stride
+        : 0;
       const card = new Card(this, {
-        x: 120 + (i % 4) * 210, y: 40 + Math.floor(i / 4) * 105, width: 200, height: 90,
+        x: left + rowOffset + col * stride, y: 40 + row * 118, width: cardW, height: cardH,
         title: p.name, subtitle: p.nickname,
         stats: [
           { label: 'Pace', value: p.skills.pace },
@@ -82,10 +96,11 @@ export class MainMenuScene extends Phaser.Scene {
       group.add(card);
      });
 
-    this.drawSectionBar(group, 80, 560, 'SELECT BIKE');
+    this.drawSectionBar(group, 80, 580, 'SELECT BIKE');
+    const bikeH = 114;
     BRAND_ROSTER.forEach((b, i) => {
       const card = new Card(this, {
-        x: 160 + i * 235, y: 650, width: 220, height: 100,
+        x: left + i * stride, y: 675, width: cardW, height: bikeH,
         title: b.name,
         stats: [
           { label: 'Speed', value: b.params.speed },
