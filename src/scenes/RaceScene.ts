@@ -7,10 +7,15 @@ import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
+import { THEME, hex } from '../ui/theme';
 import { SoundEngine } from '../core/SoundEngine';
 import { saveCareer } from '../core/CareerStore';
 import { prizeFor } from '../core/Economy';
-import type { SeasonState, Risk, CareerState } from '../core/types';
+import { generateCommentary } from '../core/Commentary';
+import { calcTireWear, getTireGrip, getCompoundColor, getCompoundLabel } from '../core/TireModel';
+import type { TireCompound } from '../core/types';
+
+import type { SeasonState, Risk, CareerState, RaceSnapshot, CommentaryEvent } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
 const ORDER: { risk: Risk; label: string }[] = [
@@ -52,6 +57,13 @@ export class RaceScene extends Phaser.Scene {
   private soundEngine!: SoundEngine;
   private muteBtn!: Phaser.GameObjects.Text;
   private career: CareerState | null = null;
+  private commentaryText!: Phaser.GameObjects.Text;
+  private commentaryQueue: CommentaryEvent[] = [];
+  private commentaryTimer = 0;
+  private compounds: Map<string, TireCompound> = new Map();
+  private wear: Map<string, number> = new Map();
+  private tireText!: Phaser.GameObjects.Text;
+  private prevSnapshot!: RaceSnapshot;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
@@ -61,9 +73,19 @@ export class RaceScene extends Phaser.Scene {
     this.lapsDone = 0; this.acc = 0; this.speed = 1; this.order = data.season.lastRisk ?? 'medium'; this.done = false;
     this.orderBoxes = []; this.speedBoxes = []; this.prevPlayerPos = -1;
     this.career = data.career ?? null;
+    this.commentaryQueue = [];
+    this.commentaryTimer = 0;
+    this.compounds = new Map();
+    this.wear = new Map();
+    const playerCompound = data.season.lastCompound ?? 'medium';
+    for (const s of data.run.states) {
+      this.compounds.set(s.rider.id, s.rider.isPlayer ? playerCompound : 'medium');
+      this.wear.set(s.rider.id, 0);
+    }
    }
 
   create(): void {
+    this.drawBackground();
     const run = this.sd.run;
     const weather = run.weather;
     const weatherEmoji = weather === 'wet' ? '🌧️' : '☀️';
@@ -97,28 +119,36 @@ export class RaceScene extends Phaser.Scene {
     // "YOU" label pinned above the player's dot so it's never ambiguous which one is you.
     this.youText = this.add.text(OX, OY, 'YOU', { fontSize: '12px', color: '#f5c518', fontStyle: 'bold' }).setOrigin(0.5);
 
-    this.lapText = this.add.text(700, 110, '', { fontSize: '20px', color: '#f5c518' });
-    this.playerLapText = this.add.text(700, 134, '', { fontSize: '14px', color: '#9ad0ff' });
-    this.orderText = this.add.text(700, 158, '', { fontFamily: 'monospace', fontSize: '13px', color: '#e0e0e0' });
-    this.flText = this.add.text(700, 322, '', { fontFamily: 'monospace', fontSize: '13px', color: '#d500f9' });
-    this.calloutText = this.add.text(70, 590, '', { fontSize: '16px', color: '#00e5ff' });
-    this.flashText = this.add.text(370, 590, '', { fontSize: '18px', color: '#00c853', fontStyle: 'bold' }).setOrigin(0, 0.5).setAlpha(0);
+    this.drawPanel(688, 64, 316, 486);
+    this.add.text(704, 80, 'LIVE TIMING', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    this.tireText = this.add.text(704, 104, '', { fontFamily: THEME.fontFamily, fontSize: '13px', color: '#e0e0e0' });
+    this.lapText = this.add.text(704, 124, '', { fontSize: '20px', color: '#f5c518' });
+    this.playerLapText = this.add.text(704, 148, '', { fontSize: '14px', color: '#9ad0ff' });
+    this.orderText = this.add.text(704, 172, '', { fontFamily: 'monospace', fontSize: '13px', color: '#e0e0e0' });
+    this.flText = this.add.text(704, 336, '', { fontFamily: 'monospace', fontSize: '13px', color: '#d500f9' });
+    this.drawPanel(56, 540, 624, 70);
+    this.add.text(72, 548, 'COMMENTARY', { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold, fontStyle: 'bold' });
+    this.commentaryText = this.add.text(72, 566, '', { fontFamily: THEME.fontFamily, fontSize: '14px', color: '#f5c518', wordWrap: { width: 592 } }).setAlpha(0.9);
+    this.calloutText = this.add.text(72, 588, '', { fontSize: '16px', color: '#00e5ff' });
+    this.flashText = this.add.text(370, 582, '', { fontSize: '18px', color: '#00c853', fontStyle: 'bold' }).setOrigin(0, 0.5).setAlpha(0);
 
     // Order radio (live risk).
-    this.add.text(70, 612, 'Orders', { fontSize: '16px', color: '#e0e0e0' });
+    this.drawPanel(56, 626, 476, 86);
+    this.add.text(70, 634, 'Orders', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     ORDER.forEach((o, i) => {
-      const box = this.add.rectangle(140 + i * 150, 648, 140, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(140 + i * 150, 648, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(140 + i * 150, 662, 140, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(140 + i * 150, 662, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { this.order = o.risk; this.sd.season.lastRisk = o.risk; this.refreshOrder(); });
       this.orderBoxes.push(box);
     });
     this.refreshOrder();
 
     // Speed control.
-    this.add.text(640, 612, 'Speed', { fontSize: '16px', color: '#e0e0e0' });
+    this.drawPanel(552, 626, 280, 86);
+    this.add.text(566, 634, 'Speed', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     RACE_SPEEDS.forEach((sp, i) => {
-      const box = this.add.rectangle(700 + i * 70, 648, 60, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(700 + i * 70, 648, `${sp}x`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(680 + i * 70, 662, 60, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(680 + i * 70, 662, `${sp}x`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { this.speed = sp; this.refreshSpeed(); });
       this.speedBoxes.push(box);
     });
@@ -133,22 +163,23 @@ export class RaceScene extends Phaser.Scene {
      });
 
     this.drawLegend();
-    new Button(this, { x: 900, y: 712, width: 150, height: 44, label: 'SKIP', onClick: () => this.skip() });
+    new Button(this, { x: 930, y: 670, width: 140, height: 44, label: 'SKIP', onClick: () => this.skip() });
     // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
+    this.prevSnapshot = this.buildSnapshot();
     this.advanceOneLap();
     this.renderFrame(0);
   }
 
   private drawLegend(): void {
-    this.add.text(700, 348, 'Orders:  Attack = push (risky) · Defend = hold · Settle = safe', { fontSize: '12px', color: '#94a3b8', wordWrap: { width: 312 } });
-    this.add.text(700, 388, 'Bikes:', { fontSize: '12px', color: '#94a3b8' });
+    this.drawPanel(688, 358, 316, 118);
+    this.add.text(704, 372, 'Bikes:', { fontFamily: THEME.fontFamily, fontSize: '13px', color: '#94a3b8', fontStyle: 'bold' });
     const legend: [string, number][] = [['Velocita', 0xe94560], ['Apex', 0x4fc3f7], ['Titan', 0xcfd8dc], ['Vortex', 0xff9800]];
     legend.forEach(([name, color], i) => {
-      const lx = 758 + (i % 2) * 130, ly = 390 + Math.floor(i / 2) * 22;
+      const lx = 758 + (i % 2) * 130, ly = 392 + Math.floor(i / 2) * 24;
       this.add.circle(lx, ly, 5, color);
-      this.add.text(lx + 12, ly, name, { fontSize: '12px', color: '#e0e0e0' }).setOrigin(0, 0.5);
+      this.add.text(lx + 12, ly, name, { fontSize: '13px', color: '#e0e0e0' }).setOrigin(0, 0.5);
     });
-    this.add.text(700, 440, "Gold ring = you  ·  cyan ring = the rider you're chasing", { fontSize: '12px', color: '#94a3b8', wordWrap: { width: 312 } });
+    this.add.text(704, 448, "Gold ring = you  ·  cyan ring = the rider you're chasing", { fontFamily: THEME.fontFamily, fontSize: '12px', color: '#94a3b8', wordWrap: { width: 284 } });
   }
 
   private refreshOrder(): void {
@@ -158,11 +189,33 @@ export class RaceScene extends Phaser.Scene {
     RACE_SPEEDS.forEach((sp, i) => this.speedBoxes[i].setFillStyle(sp === this.speed ? 0x0f3460 : 0x16213e).setStrokeStyle(2, sp === this.speed ? 0xf5c518 : 0x0f3460));
   }
 
+  private drawBackground(): void {
+    const g = this.add.graphics();
+    g.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
+    g.fillRect(0, 0, 1024, 1100);
+  }
+
+  private drawPanel(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    g.fillStyle(THEME.panelStyle.bgNum, 0.85);
+    g.fillRoundedRect(x, y, w, h, THEME.panelStyle.radius);
+    g.lineStyle(2, THEME.panelStyle.borderNum, 1);
+    g.strokeRoundedRect(x, y, w, h, THEME.panelStyle.radius);
+    return g;
+  }
+
   private drawTrack(): void {
     const g = this.add.graphics();
     const pts = this.path.samples.map((p) => new Phaser.Math.Vector2(OX + p.x * W, OY + p.y * H));
-    g.lineStyle(10, 0x16213e); g.strokePoints(pts, true, true);
-    g.lineStyle(2, 0x0f3460); g.strokePoints(pts, true, true);
+    // Grass/outer curb.
+    g.lineStyle(26, 0x1b5e20); g.strokePoints(pts, true, true);
+    // Alternating curb segments on curves.
+    g.lineStyle(18, 0xc62828); g.strokePoints(pts, true, true);
+    g.lineStyle(18, 0xffffff); g.strokePoints(pts, true, true);
+    // Asphalt surface.
+    g.lineStyle(14, 0x263238); g.strokePoints(pts, true, true);
+    // Inner edge line.
+    g.lineStyle(2, 0xffffff, 0.35); g.strokePoints(pts, true, true);
   }
 
   // Checkered start/finish bar across the track at t=0, perpendicular to the racing line.
@@ -189,9 +242,15 @@ export class RaceScene extends Phaser.Scene {
 
   private advanceOneLap(): void {
     this.snapshot(this.prev);
+    this.prevSnapshot = this.buildSnapshot();
+    const preCrashed = new Set(this.sd.run.states.filter((s) => s.crashed).map((s) => s.rider.id));
     stepLap(this.sd.run, this.order);
+    this.applyTireWearAndGrip();
+    const newCrash = this.sd.run.states.some((s) => s.crashed && !preCrashed.has(s.rider.id));
+    if (newCrash) this.soundEngine.playCrash();
     this.snapshot(this.cur);
     this.lapsDone += 1;
+    this.commentaryQueue.push(...generateCommentary(this.prevSnapshot, this.buildSnapshot()));
     // Record each rider's lap time from the progress gained this lap (skip crash laps).
     for (const s of this.sd.run.states) {
       if (s.crashed) continue;
@@ -203,6 +262,92 @@ export class RaceScene extends Phaser.Scene {
       const best = this.bestLap.get(s.rider.id);
       if (best === undefined || lt < best) this.bestLap.set(s.rider.id, lt);
       if (!this.fastest || lt < this.fastest.time) this.fastest = { id: s.rider.id, time: lt };
+    }
+  }
+
+  private buildSnapshot(): RaceSnapshot {
+    const states = this.sd.run.states;
+    const order = states.slice().sort((a, b) => {
+      if (a.crashed !== b.crashed) return a.crashed ? 1 : -1;
+      return b.progress - a.progress;
+    });
+    const positions = new Map(order.map((s, i) => [s.rider.id, i + 1]));
+    const riders = states.map((s) => ({ id: s.rider.id, name: s.rider.name }));
+    const crashed = new Set(states.filter((s) => s.crashed).map((s) => s.rider.id));
+    const fastestLap = this.fastest ? { id: this.fastest.id, time: formatLapTime(this.fastest.time) } : null;
+    const overtakeBy = new Map<string, string>();
+    if (this.prevSnapshot) {
+      const playerId = this.sd.season.playerRider.id;
+      const prevPos = this.prevSnapshot.positions.get(playerId) ?? -1;
+      const curPos = positions.get(playerId) ?? -1;
+      if (prevPos > 0 && curPos > 0 && curPos < prevPos) {
+        // The rider who was at the player's current position in the previous snapshot was overtaken.
+        for (const [rid, pos] of this.prevSnapshot.positions.entries()) {
+          if (pos === curPos) { overtakeBy.set(playerId, rid); break; }
+        }
+      }
+    }
+    return {
+      lap: this.lapsDone,
+      totalLaps: RACE_LAPS,
+      positions,
+      riders,
+      crashed,
+      fastestLap,
+      tireWear: new Map(this.wear),
+      overtookBy: new Map(),
+      overtakeBy,
+    };
+  }
+
+  private applyTireWearAndGrip(): void {
+    for (const s of this.sd.run.states) {
+      if (s.crashed) continue;
+      const id = s.rider.id;
+      const compound = this.compounds.get(id) ?? 'medium';
+      const prevProgress = this.prev.get(id) ?? 0;
+      const consistency = s.rider.skills.consistency;
+      const newWear = calcTireWear(this.lapsDone + 1, compound, consistency);
+      this.wear.set(id, newWear);
+      const grip = getTireGrip(newWear, compound);
+      const gain = s.progress - prevProgress;
+      if (gain > 0.01) s.progress = prevProgress + gain * grip;
+    }
+  }
+
+  private updateCommentary(delta: number): void {
+    if (this.commentaryQueue.length === 0) {
+      this.commentaryText.setText('');
+      return;
+    }
+    this.commentaryTimer += delta;
+    if (this.commentaryTimer > 2200) {
+      this.commentaryTimer = 0;
+      this.commentaryQueue.shift();
+    }
+    const ev = this.commentaryQueue[0];
+    this.commentaryText.setText(ev ? ev.text : '');
+  }
+
+  private applyDotNudge(screen: Map<string, { x: number; y: number; t: number }>): void {
+    const ids = [...screen.keys()];
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = screen.get(ids[i])!, b = screen.get(ids[j])!;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0 && dist < 12) {
+          const midT = ((a.t + b.t) / 2 + 1) % 1;
+          const p0 = pointAt(this.path, midT);
+          const p1 = pointAt(this.path, (midT + 0.005) % 1);
+          const tx = (p1.x - p0.x) * W, ty = (p1.y - p0.y) * H;
+          const len = Math.hypot(tx, ty) || 1;
+          const nx = -ty / len, ny = tx / len;
+          const push = 4 * (1 - dist / 12);
+          a.x -= nx * push; a.y -= ny * push;
+          b.x += nx * push; b.y += ny * push;
+        }
+      }
     }
   }
 
@@ -227,13 +372,13 @@ export class RaceScene extends Phaser.Scene {
     }));
     const slots = new Map(trainLayout(entries, { minSep: MIN_SEP, gapScale, maxStep: MAX_STEP, maxSpread: MAX_SPREAD }).map((sl) => [sl.id, sl]));
 
-    const screen = new Map<string, { x: number; y: number }>();
+    const screen = new Map<string, { x: number; y: number; t: number }>();
     for (const s of states) {
       const id = s.rider.id;
       const g = this.gfx.get(id)!;
       if (s.crashed) {
         g.dot.setFillStyle(0xff1744);                 // frozen where they crashed
-        screen.set(id, { x: g.dot.x, y: g.dot.y });
+        screen.set(id, { x: g.dot.x, y: g.dot.y, t: 0 });
         continue;
       }
       const target = slots.get(id)!.placeBehind;
@@ -243,9 +388,16 @@ export class RaceScene extends Phaser.Scene {
       const t = (((anchor - pb) % 1) + 1) % 1;
       const pt = pointAt(this.path, t);
       const sx = OX + pt.x * W, sy = OY + pt.y * H;
-      g.dot.setPosition(sx, sy); g.num.setPosition(sx, sy);
-      if (g.ring) g.ring.setPosition(sx, sy);
-      screen.set(id, { x: sx, y: sy });
+      screen.set(id, { x: sx, y: sy, t });
+    }
+    this.applyDotNudge(screen);
+    for (const s of states) {
+      const id = s.rider.id;
+      const g = this.gfx.get(id)!;
+      if (s.crashed) continue;
+      const pos = screen.get(id)!;
+      g.dot.setPosition(pos.x, pos.y); g.num.setPosition(pos.x, pos.y);
+      if (g.ring) g.ring.setPosition(pos.x, pos.y);
     }
 
     // Leaderboard — real progress (the same key the result uses), gaps on the race-fiction clock.
@@ -256,6 +408,9 @@ export class RaceScene extends Phaser.Scene {
     const playerIdx = order.findIndex((s) => s.rider.isPlayer);
 
     const pLast = this.lastLap.get(this.sd.season.playerRider.id);
+    const playerCompound = this.compounds.get(this.sd.season.playerRider.id) ?? 'medium';
+    const playerWear = Math.round(this.wear.get(this.sd.season.playerRider.id) ?? 0);
+    this.tireText.setText(`Tires: ${getCompoundLabel(playerCompound)} ${playerWear}%`).setColor(hex(getCompoundColor(playerCompound)));
     this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone)} / ${RACE_LAPS}`);
     this.playerLapText.setText(`Last lap: ${pLast ? formatLapTime(pLast) : '—'}`);
 
@@ -288,7 +443,6 @@ export class RaceScene extends Phaser.Scene {
     if (me?.crashed) {
       this.chaseRing.setVisible(false);
       this.calloutText.setText('You crashed out.');
-      this.soundEngine.playCrash();
      } else if (playerIdx > 0) {
       const ahead = order[playerIdx - 1];
       const pos = screen.get(ahead.rider.id)!;
@@ -319,6 +473,7 @@ export class RaceScene extends Phaser.Scene {
 
   update(_t: number, delta: number): void {
     if (this.done) return;
+    this.updateCommentary(delta);
     const lapMs = (RACE_ANIM_SECONDS * 1000) / RACE_LAPS;
     this.acc += delta * this.speed;
     while (this.acc >= lapMs && this.lapsDone < RACE_LAPS) { this.advanceOneLap(); this.acc -= lapMs; }

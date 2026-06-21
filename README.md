@@ -10,16 +10,16 @@ You run a single rider through one championship season and try to win the title.
 
 ## The game in one minute
 
-You manage **one rider** on a grid of 10. A season is **6 races**. Before each race you pick a **riding style**, the race is simulated, and the championship table updates. Win the most points across the season and you're champion.
+You manage **one rider** on a grid of 10. A season is **6 races**. Before each race you pick a **riding style**, **bike setup**, and **tire compound**, then watch the race unfold lap-by-lap. The championship table updates after every round. Win the most points across the season and you're champion.
 
-That's the whole game. It plays in about five minutes.
+A full season plays in about five minutes.
 
 ---
 
 ## Core loop
 
 1. **Season start** — name your rider and team. A fixed 6-race calendar is generated, along with 9 AI rivals with randomized stats.
-2. **Race weekend** — see the next track and your rider, then pick **one riding style**:
+2. **Race weekend** — see the next track and your rider, then pick a **bike setup** (Top Speed / Handling / Acceleration) and **riding style**:
    - **Safe** — lower pace, very low chance of a mistake.
    - **Balanced** — neutral pace and risk.
    - **Aggressive** — higher pace, higher chance of a costly mistake.
@@ -39,7 +39,7 @@ Just three, scored 1–10:
 | **Cornering** | Performance through technical sections. |
 | **Consistency** | Resistance to mistakes; reduces the downside of aggressive riding. |
 
-Riding style trades **expected pace against mistake risk**. A consistent rider can push Aggressive more safely than an erratic one.
+Setup should match the track's strengths, and riding style trades **expected pace against mistake risk**. A consistent rider can push Aggressive more safely than an erratic one.
 
 ---
 
@@ -59,14 +59,15 @@ Most points after 6 races wins the championship.
 
 ### In V1
 - One player-controlled rider + 9 AI riders.
-- 6-race fixed calendar, single season.
-- One riding-style decision per race.
-- Simulated results from stats + style + randomness.
+- 6-race fixed calendar with multi-season career support.
+- Pre-race decisions: bike setup, tire compound, and riding style.
+- Interactive lap-by-lap race view with live commentary.
+- Simulated results from stats + setup + style + tires + weather + randomness.
 - Live championship standings.
-- Single play session (no save).
+- Save/load career, prize money, and bike R&D upgrades.
 
 ### Out of V1 (deferred to V2+)
-Money & budget · bike upgrades / R&D · staff, engineers & contracts · sponsors · multiple seasons & career tiers · weather & tire strategy · rider avatars · live lap-by-lap race view.
+Sponsors · staff, engineers & contracts · multi-rider hiring · rider avatars.
 
 These are intentionally out. They are what over-scoped the previous attempts.
 
@@ -75,18 +76,20 @@ These are intentionally out. They are what over-scoped the previous attempts.
 ## Tech stack
 
 - **Language:** TypeScript
-- **Engine:** [Phaser 3](https://phaser.io/)
+- **Engine:** [Phaser 4](https://phaser.io/)
 - **Build tool:** Vite
 - **Runtime:** Browser
 
 ### Scenes
 
-The entire game is three scenes:
+The game uses seven scenes:
 
 ```
-MainMenu  →  Season (calendar + standings + "Next Race")  →  RaceResult
-                 ↑___________________________________________________|
+Boot → MainMenu → Season (calendar + standings + setup) → Race → RaceResult → OffSeason
+       ↑______________________________________________________________|
 ```
+
+Plus a **SaveLoad** scene for managing careers.
 
 ---
 

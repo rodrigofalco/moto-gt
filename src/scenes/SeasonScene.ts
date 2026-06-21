@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
 import { renderStandings } from '../ui/StandingsTable';
+import { THEME } from '../ui/theme';
 import { createRace } from '../core/RaceEngine';
 import { runQualifying } from '../core/Qualifying';
 import { getStandings } from '../core/Championship';
@@ -11,9 +12,11 @@ import { SETUPS } from '../core/constants';
 import { recommendedSetup } from '../core/Advice';
 import { SoundEngine } from '../core/SoundEngine';
 import { formatMoney } from '../core/format';
-import type { SeasonState, Setup, BikeParams, CareerState } from '../core/types';
+import type { SeasonState, Setup, BikeParams, CareerState, TireCompound } from '../core/types';
 
 const SETUP_LABEL: Record<Setup, string> = { topSpeed: 'Top Speed', handling: 'Handling', acceleration: 'Acceleration' };
+const COMPOUND_LABEL: Record<TireCompound, string> = { soft: 'Soft', medium: 'Medium', hard: 'Hard' };
+const COMPOUND_COLOR: Record<TireCompound, number> = { soft: 0xff0000, medium: 0xffffff, hard: 0xffaa00 };
 type BikeParam = keyof BikeParams;
 
 export class SeasonScene extends Phaser.Scene {
@@ -29,31 +32,47 @@ export class SeasonScene extends Phaser.Scene {
   constructor() { super('SeasonScene'); }
   init(data: { season: SeasonState; career?: CareerState }): void {
     this.season = data.season;
-    this.career = data.career ?? { player: data.season.playerRider, field: data.season.aiRiders } as CareerState;
+    this.career = data.career ?? { player: data.season.playerRider, field: data.season.aiRiders, money: 0 } as CareerState;
+  }
+
+  private drawBackground(): void {
+    const g = this.add.graphics();
+    g.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
+    g.fillRect(0, 0, 1024, 1100);
   }
 
   create(): void {
+    this.drawBackground();
     const sound = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
     const idx = this.season.currentRaceIndex;
     const track = this.season.calendar[idx];
     this.setup = recommendedSetup(track.weights);
+    this.season.lastCompound = this.season.lastCompound ?? 'medium';
     const weather = this.season.weatherByRace?.[idx] ?? 'dry';
     const weatherEmoji = weather === 'wet' ? '🌧️' : '☀️';
-    this.add.text(40, 24, `Race ${idx + 1} of ${this.season.calendar.length} - ${track.name} ${weatherEmoji}`, { fontSize: '24px', color: '#f5c518' });
-    this.add.text(40, 60, `Track focus   Speed ${track.weights.speed.toFixed(2)}   Cornering ${track.weights.cornering.toFixed(2)}   Accel ${track.weights.acceleration.toFixed(2)}`, { fontSize: '15px', color: '#94a3b8' });
+
+    // Race info panel.
+    this.drawPanel(24, 16, 660, 128);
+    this.add.text(44, 30, `Race ${idx + 1} of ${this.season.calendar.length} - ${track.name} ${weatherEmoji}`, { fontFamily: THEME.fontFamily, fontSize: '24px', color: THEME.gold, fontStyle: 'bold' });
+    this.add.text(44, 62, `Track focus   Speed ${track.weights.speed.toFixed(2)}   Cornering ${track.weights.cornering.toFixed(2)}   Accel ${track.weights.acceleration.toFixed(2)}`, { fontFamily: THEME.fontFamily, fontSize: '15px', color: THEME.muted });
     const HINT: Record<Setup, string> = {
       topSpeed: 'Power track -> Top Speed setup favored',
       handling: 'Technical track -> Handling setup favored',
       acceleration: 'Stop-go track -> Acceleration setup favored',
      };
     const wetHint = weather === 'wet' ? ' (Wet conditions — Handling is more valuable)' : '';
-    this.add.text(40, 84, HINT[this.setup] + wetHint, { fontSize: '15px', color: '#00e5ff' });
+    this.add.text(44, 86, HINT[this.setup] + wetHint, { fontFamily: THEME.fontFamily, fontSize: '15px', color: THEME.cyan });
+    this.add.text(44, 110, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.muted });
+
+    // Your team panel.
+    this.drawPanel(24, 156, 660, 160);
+    this.add.text(44, 170, 'YOUR TEAM', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     const s = this.season.playerRider.skills;
-    this.add.text(40, 108, `Pilot   Pace ${s.pace}   Cornering ${s.cornering}   Consistency ${s.consistency}`, { fontSize: '16px', color: '#e0e0e0' });
-    this.bikeText = this.add.text(40, 138, '', { fontSize: '16px', color: '#e0e0e0' });
-    this.moneyText = this.add.text(40, 156, '', { fontSize: '16px', color: '#f5c518' });
+    this.add.text(44, 196, `Pilot   Pace ${s.pace}   Cornering ${s.cornering}   Consistency ${s.consistency}`, { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.text });
+    this.bikeText = this.add.text(44, 222, '', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.text });
+    this.moneyText = this.add.text(44, 244, '', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold });
     this.refreshMoney();
-    const buyRndBtn = this.add.text(40, 180, `BUY R&D POINT ($${RND_POINT_COST})`, { fontSize: '14px', color: '#00c853' }).setInteractive({ useHandCursor: true });
+    const buyRndBtn = this.add.text(44, 266, `BUY R&D POINT ($${RND_POINT_COST})`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.green }).setInteractive({ useHandCursor: true });
     buyRndBtn.on('pointerup', () => {
       if (this.career.money >= RND_POINT_COST) {
         this.career.money -= RND_POINT_COST;
@@ -63,35 +82,65 @@ export class SeasonScene extends Phaser.Scene {
         this.refreshBike();
       }
     });
-    this.rndText = this.add.text(40, 210, '', { fontSize: '16px', color: '#f5c518' });
+    this.rndText = this.add.text(300, 266, '', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold });
     (['speed', 'handling', 'acceleration'] as BikeParam[]).forEach((param, i) => {
-      const x = 40 + i * 160;
+      const x = 44 + i * 160;
       const cost = bikeUpgradeCost(this.season.playerRider.bike[param]);
-      const plus = this.add.text(x, 240, `[+] ${param} (${cost})`, { fontSize: '15px', color: '#00c853' }).setInteractive({ useHandCursor: true });
-      this.bikeButtons.push({ plus, cost: this.add.text(x + 90, 240, '', { fontSize: '12px', color: '#94a3b8' }) });
+      const plus = this.add.text(x, 296, `[+] ${param} (${cost})`, { fontFamily: THEME.fontFamily, fontSize: '15px', color: THEME.green }).setInteractive({ useHandCursor: true });
+      this.bikeButtons.push({ plus, cost: this.add.text(x + 90, 296, '', { fontFamily: THEME.fontFamily, fontSize: '12px', color: THEME.muted }) });
       plus.on('pointerup', () => {
         if (investBikePoint(this.season.playerRider, param)) { sound.playClick(); this.refreshBike(); this.refreshBikeButtons(); }
       });
     });
     this.refreshBike();
     this.refreshBikeButtons();
-    this.add.text(40, 280, 'Setup (match the track)', { fontSize: '18px', color: '#e0e0e0' });
+
+    // Setup panel.
+    this.drawPanel(24, 326, 660, 150);
+    this.add.text(44, 340, 'SETUP', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     SETUPS.forEach((st, i) => {
-      const box = this.add.rectangle(130 + i * 200, 322, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(130 + i * 200, 322, SETUP_LABEL[st], { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(130 + i * 200, 382, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(130 + i * 200, 382, SETUP_LABEL[st], { fontFamily: THEME.fontFamily, fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { sound.playClick(); this.setup = st; this.refreshSelectors(); });
       this.setupBoxes[st] = box;
     });
     const recIdx = SETUPS.indexOf(this.setup);
-    this.add.text(130 + recIdx * 200, 298, '* Recommended', { fontSize: '13px', color: '#f5c518' }).setOrigin(0.5);
+    this.add.text(130 + recIdx * 200, 368, '* Recommended', { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold }).setOrigin(0.5);
     this.refreshSelectors();
-    this.add.text(40, 372, 'Risk is your call during the race - Attack / Defend / Settle.', { fontSize: '14px', color: '#94a3b8' });
-    this.add.text(720, 64, `Races left: ${this.season.calendar.length - this.season.currentRaceIndex}`, { fontSize: '14px', color: '#94a3b8' });
-    this.add.text(720, 90, 'Standings', { fontSize: '20px', color: '#f5c518' });
-    renderStandings(this, 720, 120, getStandings(this.season), { showGap: true });
-    this.add.text(720, 240, 'Starting Grid', { fontSize: '18px', color: '#f5c518' });
-    this.showStartingGrid();
-    new Button(this, { x: 320, y: 690, width: 280, height: 56, label: 'GO TO GRID', onClick: () => { sound.playClick(); this.simulate(); } });
+
+    // Tire compound selector.
+    this.add.text(44, 412, 'TIRES', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    const compoundBoxes: Record<TireCompound, Phaser.GameObjects.Rectangle> = {} as never;
+    (['soft', 'medium', 'hard'] as TireCompound[]).forEach((cp, i) => {
+      const box = this.add.rectangle(130 + i * 200, 454, 184, 36, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(130 + i * 200, 454, COMPOUND_LABEL[cp], { fontFamily: THEME.fontFamily, fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      box.on('pointerup', () => { sound.playClick(); this.season.lastCompound = cp; refreshCompounds(); });
+      compoundBoxes[cp] = box;
+    });
+    const refreshCompounds = () => {
+      (['soft', 'medium', 'hard'] as TireCompound[]).forEach((cp) => {
+        const selected = cp === this.season.lastCompound;
+        compoundBoxes[cp].setFillStyle(selected ? 0x0f3460 : 0x16213e).setStrokeStyle(2, selected ? COMPOUND_COLOR[cp] : 0x0f3460);
+      });
+    };
+    refreshCompounds();
+
+    // Championship panel.
+    this.drawPanel(688, 16, 320, 480);
+    this.add.text(708, 30, 'CHAMPIONSHIP', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    renderStandings(this, 696, 58, getStandings(this.season), { showGap: true });
+    this.add.text(708, 304, 'Starting Grid', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    this.showStartingGrid(708, 332);
+
+    new Button(this, { x: 354, y: 560, width: 280, height: 56, label: 'GO TO GRID', onClick: () => { sound.playClick(); this.simulate(); } });
+  }
+
+  private drawPanel(x: number, y: number, w: number, h: number): void {
+    const g = this.add.graphics();
+    g.fillStyle(THEME.panelStyle.bgNum, 0.85);
+    g.fillRoundedRect(x, y, w, h, THEME.panelStyle.radius);
+    g.lineStyle(2, THEME.panelStyle.borderNum, 1);
+    g.strokeRoundedRect(x, y, w, h, THEME.panelStyle.radius);
   }
 
   private refreshMoney(): void { this.moneyText.setText(`Money: ${formatMoney(this.career.money)}`); }
@@ -106,10 +155,10 @@ export class SeasonScene extends Phaser.Scene {
   private refreshBike(): void {
     const b = this.season.playerRider.bike;
     this.bikeText.setText(`Bike    Speed ${b.speed}   Handling ${b.handling}   Acceleration ${b.acceleration}`);
-    this.rndText.setText(`Development points: ${this.season.playerRider.rndPoints}    (spend below)`);
+    this.rndText.setText(`Dev points: ${this.season.playerRider.rndPoints}`);
   }
   private refreshSelectors(): void {
-    SETUPS.forEach((st) => this.setupBoxes[st].setFillStyle(st === this.setup ? 0x0f3460 : 0x16213e).setStrokeStyle(2, st === this.setup ? 0xf5c518 : 0x0f3460));
+    SETUPS.forEach((st) => this.setupBoxes[st].setFillStyle(st === this.setup ? 0x0f3460 : 0x16213e).setStrokeStyle(2, st === this.setup ? THEME.goldNum : 0x0f3460));
   }
    private simulate(): void {
      const rng = new RNG((Date.now() ^ (this.season.currentRaceIndex * 2654435761)) >>> 0);
@@ -119,12 +168,12 @@ export class SeasonScene extends Phaser.Scene {
      this.scene.start('RaceScene', { season: this.season, run, career: this.career, grid: qualifying.gridOrder } as never);
     }
 
-   private showStartingGrid(): void {
+   private showStartingGrid(x: number, y: number): void {
      const field = [this.season.playerRider, ...this.season.aiRiders];
      const lines = field.map((r, i) => {
        const tag = r.isPlayer ? '> ' : '  ';
        return `${tag}${i + 1}. ${r.name}`;
       });
-     this.add.text(720, 264, lines.join('\n'), { fontSize: '12px', color: '#e0e0e0' }).setOrigin(0, 0);
+     this.add.text(x, y, lines.join('\n'), { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.text });
     }
  }

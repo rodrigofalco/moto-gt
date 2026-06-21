@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Button } from '../ui/Button';
+import { THEME } from '../ui/theme';
 import { runOffSeason } from '../core/OffSeason';
 import { createSeasonForCareer } from '../core/factories/SeasonFactory';
 import { saveCareer } from '../core/CareerStore';
@@ -19,30 +20,74 @@ export class OffSeasonScene extends Phaser.Scene {
      }
 
   create(): void {
-    this.add.text(512, 36, 'OFF-SEASON REPORT', { fontSize: '32px', color: '#f5c518' }).setOrigin(0.5);
-    this.add.text(512, 72, `Season ${this.report.previousSeason} complete`, { fontSize: '18px', color: '#e0e0e0' }).setOrigin(0.5);
-    this.add.text(512, 100, `Champion: ${this.report.champion}`, { fontSize: '16px', color: '#94a3b8' }).setOrigin(0.5);
-    this.add.text(512, 124, `You finished P${this.report.playerFinish}`, { fontSize: '18px', color: '#00e5ff' }).setOrigin(0.5);
+    const g = this.add.graphics();
+    g.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
+    g.fillRect(0, 0, 1024, 1100);
+
+    this.add.text(512, 36, 'OFF-SEASON REPORT', { fontFamily: THEME.fontFamily, fontSize: '32px', color: THEME.gold, fontStyle: 'bold' }).setOrigin(0.5);
+
+    this.drawPanel(212, 72, 600, 84);
+    this.add.text(512, 96, `Season ${this.report.previousSeason} complete`, { fontFamily: THEME.fontFamily, fontSize: '18px', color: THEME.text }).setOrigin(0.5);
+    this.add.text(512, 120, `Champion: ${this.report.champion}`, { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.muted }).setOrigin(0.5);
+    this.add.text(512, 142, `You finished P${this.report.playerFinish}`, { fontFamily: THEME.fontFamily, fontSize: '20px', color: THEME.cyan, fontStyle: 'bold' }).setOrigin(0.5);
 
     if (this.report.promoted) {
-      this.add.text(512, 156, `PROMOTED! Welcome to the next tier.`, { fontSize: '18px', color: '#00c853' }).setOrigin(0.5);
-      }
+      this.drawPanel(312, 170, 400, 80);
+      const badge = this.add.text(512, 210, `PROMOTED!`, { fontFamily: THEME.fontFamily, fontSize: '28px', color: THEME.green, fontStyle: 'bold' }).setOrigin(0.5);
+      this.add.text(512, 236, `Welcome to the next tier.`, { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.text }).setOrigin(0.5);
+      this.tweens.add({ targets: badge, angle: 2, duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.spawnConfetti();
+    }
 
+    const rosterY = this.report.promoted ? 270 : 180;
+    this.drawPanel(212, rosterY, 600, 120);
+    this.add.text(232, rosterY + 14, 'ROSTER CHANGES', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     if (this.report.retired.length > 0) {
-      this.add.text(512, 196, `Retired: ${this.report.retired.join(', ')}`, { fontSize: '14px', color: '#e94560' }).setOrigin(0.5);
-      }
-
+      this.add.text(232, rosterY + 42, `Retired: ${this.report.retired.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.red });
+    }
     if (this.report.rookies.length > 0) {
-      this.add.text(512, 220, `New rookies: ${this.report.rookies.join(', ')}`, { fontSize: '14px', color: '#9ad0ff' }).setOrigin(0.5);
-      }
+      this.add.text(232, rosterY + 68, `New rookies: ${this.report.rookies.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.blue });
+    }
+    if (this.report.retired.length === 0 && this.report.rookies.length === 0) {
+      this.add.text(232, rosterY + 42, 'No roster changes this off-season.', { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.muted });
+    }
 
     if (this.report.statChanges.length > 0) {
+      const statsY = rosterY + 140;
+      this.drawPanel(212, statsY, 600, 110);
+      this.add.text(232, statsY + 14, 'STAT CHANGES', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
       const notes = this.report.statChanges.slice(0, 5).map((s) => `${s.riderId}: ${s.note}`);
-      this.add.text(512, 256, notes.join('\n'), { fontSize: '13px', color: '#94a3b8', wordWrap: { width: 700 } }).setOrigin(0.5);
-      }
-
-    new Button(this, { x: 512, y: 400, width: 320, height: 54, label: 'START NEXT SEASON', onClick: () => this.nextSeason() });
+      this.add.text(232, statsY + 42, notes.join('\n'), { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.muted, wordWrap: { width: 560 } });
     }
+
+    new Button(this, { x: 512, y: 640, width: 320, height: 54, label: 'START NEXT SEASON', onClick: () => this.nextSeason() });
+    }
+
+  private drawPanel(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    g.fillStyle(THEME.panelStyle.bgNum, 0.85);
+    g.fillRoundedRect(x, y, w, h, THEME.panelStyle.radius);
+    g.lineStyle(2, THEME.panelStyle.borderNum, 1);
+    g.strokeRoundedRect(x, y, w, h, THEME.panelStyle.radius);
+    return g;
+  }
+
+  private spawnConfetti(): void {
+    for (let i = 0; i < 40; i++) {
+      const x = 200 + Math.random() * 624;
+      const y = 100 + Math.random() * 200;
+      const color = [THEME.goldNum, THEME.greenNum, THEME.cyanNum, THEME.redNum][Math.floor(Math.random() * 4)];
+      const p = this.add.rectangle(x, y, 6, 6, color);
+      this.tweens.add({
+        targets: p,
+        y: y + 300 + Math.random() * 200,
+        angle: Math.random() * 360,
+        alpha: 0,
+        duration: 2000 + Math.random() * 1500,
+        ease: 'Quad.easeIn',
+      });
+    }
+  }
 
   private nextSeason(): void {
     const rng = new RNG((Date.now() ^ this.career.seasonNumber) >>> 0);
