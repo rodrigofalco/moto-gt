@@ -7,13 +7,15 @@
 - **Build:** ✅ `npm run build` → 1.4MB bundle
 - **Dev:** `npm run dev` → http://localhost:5173/
 
-## Latest Session Notes
+## Latest Session Notes (2026-06-21)
 - V2 overnight polish pass committed (`feat(v2)`): unique AI names, finish line, overtake flash, race legend, result arrows, season podium, hub track hints.
+- Visual-fixes plan executed & **archived** to `docs/done/plans/motogt-visual-fixes.md` — all 5 deferred features wired (see below), F1–F4 review agents APPROVED, build+136 tests green.
 - Project infrastructure committed (`chore(project)`): `AGENTS.md`, `.pi/` config, `docs/`, screenshot helpers, verification tools, updated `.gitignore`.
-- **Balance decisions:**
-  - **P1 (accel = (bike + pilot.pace) / 2)** was already present in the codebase from an earlier commit.
+- **Balance state (N=150 sweep, `tests/sweep.test.ts` → `/tmp/sweep-report.txt`):**
+  - **P1 (accel blended with pilot pace) IS applied** — commit `15c4e85`. The overnight log's "Vortex 42%" finding was measured *before* this commit; it is stale.
+  - **Brand balance is now excellent:** Velocita 38.1% · Apex 37.9% · Vortex 36.7% · Titan 36.6% — only **1.5pt spread**. ✅
   - **Crash tuning applied:** `BASE_CRASH` bumped ~1.4× (0.028/0.084/0.224 → 0.039/0.118/0.314) to restore ~9–10% player crash rate.
-  - **Full pilot-roster spread is wide** (Drift Prince ~64% down to Ice Rider ~8%). Brand balance is excellent (36–38% each). **Decision:** accept the pilot spread as intentional roster flavor/difficulty; the formal three-reference-build harness remains green.
+  - **Pilot spread remains very wide:** Drift Prince 63.7% → Ice Rider 8.3% = **55pt spread**. Previous session accepted this as "roster flavor"; root cause is that **`pace` is double-dipped** (feeds both `speed` and `acceleration` axes via `baseAxes`), while `cornering` feeds only one axis. Open for decision — see Known/Deferred below.
 
 ## Implemented Features
 
@@ -110,12 +112,17 @@ src/
 
 ## Known / Deferred Items
 
-- [ ] **Commentary system** needs to be wired into RaceScene (currently exists but not used)
-- [ ] **Tire model** needs integration (compound selection in hub, wear tracking in race)
-- [ ] **Sound engine** needs race-day events (overtake sounds, crash sounds)
-- [ ] **Save/Load scene** needs menu buttons to navigate to it
-- [ ] **AI variety** — 9 AI draw from 18 archetypes but could be more varied
-- [ ] **Anti-overlap dot nudge** — race day dots can stack
+### ✅ Done (previously listed as deferred — all wired & committed)
+- [x] **Commentary system** wired into RaceScene — `generateCommentary` + `commentaryText` + `updateCommentary` (`RaceScene.ts:14,131,253,318`)
+- [x] **Tire model** integrated — compound selection in hub, wear tracking via `calcTireWear`/`getTireGrip` (`RaceScene.ts:15,82,310`)
+- [x] **Sound engine** race-day events — `playCrash`, `playOvertake`, `playEngine` + mute toggle (`RaceScene.ts:250,469,482`)
+- [x] **Save/Load scene** menu buttons — `MainMenuScene.ts:38` → `SaveLoadScene`
+- [x] **Anti-overlap dot nudge** — `applyDotNudge` + EMA smoothing (`RaceScene.ts:332`)
+
+### 🔓 Open
+- [ ] **Pilot roster balance** — 55pt spread (Drift Prince 63.7% → Ice Rider 8.3%). Root cause: `pace` feeds two axes (`speed` + `acceleration`) in `baseAxes`, `cornering` feeds one. **Decision needed:** narrow the spread (e.g. cap pace's double-count, or raise cornering weight) or keep as difficulty flavor. Previous session accepted it; not yet re-decided.
+- [ ] **AI variety** — 9 AI slots draw from 18 archetypes but always the same way; could seed/rotate which archetypes appear each season. Fits V1 scope.
+- [ ] **V1 → V2 boundary** — career/save/prize/R&D are already in despite AGENTS.md saying defer to later versions. Decide whether V1 is feature-complete.
 
 ## How to Run
 ```bash
