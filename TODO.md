@@ -121,7 +121,7 @@ src/
 
 ### 🔓 Open
 - [ ] **Pilot roster balance** — 55pt spread (Drift Prince 63.7% → Ice Rider 8.3%). Root cause: `pace` feeds two axes (`speed` + `acceleration`) in `baseAxes`, `cornering` feeds one. **Decision needed:** narrow the spread (e.g. cap pace's double-count, or raise cornering weight) or keep as difficulty flavor. Previous session accepted it; not yet re-decided.
-- [ ] **AI variety** — 9 AI slots draw from 18 archetypes but always the same way; could seed/rotate which archetypes appear each season. Fits V1 scope.
+- [x] **AI variety** — 9 AI slots now draw a seeded-shuffled 9-of-17 archetypes each season (`RiderFactory.generateAIRiders`), so opponents vary across seasons. Deterministic per seed. Tests: determinism + variety (≥15/20 seeds yield distinct rosters).
 - [ ] **V1 → V2 boundary** — career/save/prize/R&D are already in despite AGENTS.md saying defer to later versions. Decide whether V1 is feature-complete.
 
 ## How to Run

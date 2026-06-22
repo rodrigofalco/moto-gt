@@ -61,10 +61,17 @@ describe('P2.7 — aging', () => {
     const career = newCareer('Test', PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(10));
     bootstrapSeason(career, new RNG(20));
     const startAge = career.player.age;
-    const startAiAge = career.field[0].age;
+    // Track the youngest AI by id — off-season retires the oldest/weakest
+    // (score = totalSkills - age*0.1; all pilots sum to 20 so highest age retires
+    // first). career.field is reordered after off-season, so index 0 may be a
+    // different rider; the youngest AI survives and should age by 1.
+    const tracker = [...career.field].sort((a, b) => a.age - b.age)[0];
+    const startAiAge = tracker.age;
     runOffSeason(career, new RNG(30));
     expect(career.player.age).toBe(startAge + 1);
-    expect(career.field[0].age).toBe(startAiAge + 1);
+    const survived = career.field.find((r) => r.id === tracker.id);
+    expect(survived).toBeDefined();
+    expect(survived!.age).toBe(startAiAge + 1);
   });
 
   it('young rider (under PEAK_AGE) never declines', () => {

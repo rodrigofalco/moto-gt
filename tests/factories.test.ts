@@ -22,6 +22,36 @@ describe('factories', () => {
     expect(ai).toHaveLength(9);
     expect(new Set(ai.map((r) => r.id)).size).toBe(9);
     expect(new Set(ai.map((r) => r.name)).size).toBe(9); // unique names, no "Rider 2" dupes
+    // Never includes the player's pilot archetype.
+    expect(ai.every((r) => r.name !== PILOT_ROSTER[0].name)).toBe(true);
+  });
+
+  it('generateAIRiders never uses the player pilot archetype', () => {
+    for (const player of PILOT_ROSTER) {
+      const ai = generateAIRiders(player.id, BRAND_ROSTER[0].id, new RNG(1));
+      expect(ai.every((r) => r.name !== player.name)).toBe(true);
+    }
+  });
+
+  it('generateAIRiders is deterministic per seed', () => {
+    const a = generateAIRiders(PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(99));
+    const b = generateAIRiders(PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(99));
+    expect(a.map((r) => r.name)).toEqual(b.map((r) => r.name));
+    expect(a.map((r) => r.brandId)).toEqual(b.map((r) => r.brandId));
+  });
+
+  it('generateAIRiders varies the archetype set across seeds (AI variety)', () => {
+    // Different seeds should pick different 9-of-17 archetype sets, so the player
+    // faces varied opponents across seasons. Not every seed must differ, but the
+    // overwhelming majority should (17 choose 9 = 24310 combinations).
+    const sets: string[][] = [];
+    for (let seed = 1; seed <= 20; seed++) {
+      const ai = generateAIRiders(PILOT_ROSTER[0].id, BRAND_ROSTER[0].id, new RNG(seed));
+      sets.push(ai.map((r) => r.name).sort());
+    }
+    const uniqueSets = new Set(sets.map((s) => s.join(',')));
+    // At least 15 of 20 seeds yield a distinct opponent roster.
+    expect(uniqueSets.size).toBeGreaterThanOrEqual(15);
   });
 
   it('createSeason assembles 1 player + 9 AI + 6 tracks', () => {

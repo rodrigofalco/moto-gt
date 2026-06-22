@@ -41,8 +41,20 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+function shuffle<T>(arr: readonly T[], rng: RNG): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = rng.nextInt(0, i);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export function generateAIRiders(playerPilotId: string, _playerBrandId: string, rng: RNG): Rider[] {
-  const pilots = PILOT_ROSTER.filter((p) => p.id !== playerPilotId);
+  // Shuffle the non-player archetypes so a different 9 of 17 appear each season
+  // (seeded by rng → deterministic per seed, but varied across seasons). Without
+  // this, the same 9 archetypes in roster order appeared every season.
+  const pilots = shuffle(PILOT_ROSTER.filter((p) => p.id !== playerPilotId), rng);
   const brands = BRAND_ROSTER.slice();
   const riders: Rider[] = [];
   for (let i = 0; i < AI_RIDER_COUNT; i++) {
