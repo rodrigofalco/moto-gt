@@ -120,7 +120,7 @@ src/
 - [x] **Anti-overlap dot nudge** — `applyDotNudge` + EMA smoothing (`RaceScene.ts:332`)
 
 ### 🔓 Open
-- [ ] **Pilot roster balance** — 55pt spread (Drift Prince 63.7% → Ice Rider 8.3%). Root cause: `pace` feeds two axes (`speed` + `acceleration`) in `baseAxes`, `cornering` feeds one. **Decision needed:** narrow the spread (e.g. cap pace's double-count, or raise cornering weight) or keep as difficulty flavor. Previous session accepted it; not yet re-decided.
+- [x] **Pilot roster balance** — Fixed: `baseAxes` now uses a 70/30 pace/cornering blend for the acceleration axis. Spread narrowed from 55pt to 38pt. Balance test passes (5.1pt spread).
 - [x] **AI variety** — 9 AI slots now draw a seeded-shuffled 9-of-17 archetypes each season (`RiderFactory.generateAIRiders`), so opponents vary across seasons. Deterministic per seed. Tests: determinism + variety (≥15/20 seeds yield distinct rosters).
 - [ ] **V1 → V2 boundary** — career/save/prize/R&D are already in despite AGENTS.md saying defer to later versions. Decide whether V1 is feature-complete.
 

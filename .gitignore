@@ -6,6 +6,7 @@ dist/
 # Tool-local state
 .omc/
 opencode.json
+opencode.json.backup-*
 .sisyphus/
 
 # Generated visual-test artifacts

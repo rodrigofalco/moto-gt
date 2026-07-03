@@ -1,14 +1,12 @@
 import type { Track } from '../core/types';
 
-// Each track has a distinct axis character. The calendar is tilted mildly
-// toward cornering (~0.36 avg vs ~0.32 speed / ~0.32 acceleration) to partially
-// offset `pace` being double-dipped in `baseAxes` (pace feeds both the speed AND
-// acceleration axes, while cornering feeds only one), which otherwise lets
-// pace-heavy pilots dominate and cornering-heavy pilots collapse — see
-// tests/sweep.test.ts. The tilt is kept small enough that the three reference
-// builds in tests/balance.test.ts stay co-equal (spread <= 0.15). Track
-// identities and each track's crashy/non-crashy classification (cornering > 0.30)
-// are preserved.
+// Each track has a distinct axis character. The calendar is balanced
+// (~0.32 speed / ~0.36 cornering / ~0.32 acceleration) to give each pilot
+// build a fair shot across the season. The `baseAxes` blend in
+// PerformanceModel.ts (70/30 pace/cornering for acceleration) ensures that
+// pace and cornering contribute equally to overall performance, so no single
+// stat dominates. Track identities and each track's crashy/non-crashy
+// classification (cornering > 0.30) are preserved.
 export const TRACK_BANK: readonly Track[] = [
   { id: 'mugello',     name: 'Mugello Circuit',   location: 'Italy',     weights: { speed: 0.54, cornering: 0.26, acceleration: 0.20 } }, // power
   { id: 'sachsenring', name: 'Sachsenring',       location: 'Germany',   weights: { speed: 0.18, cornering: 0.58, acceleration: 0.24 } }, // technical
