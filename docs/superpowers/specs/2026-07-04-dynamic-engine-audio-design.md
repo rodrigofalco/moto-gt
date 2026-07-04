@@ -10,13 +10,13 @@ The current race-day engine sound (`SoundEngine.playEngine`, fixed 2026-07-03) i
 
 ## Why this has to be a presentation-layer fiction
 
-`RaceEngine` has no sub-lap physics — `progress` advances once per lap as a single scalar (`RaceEngine.ts:stepLap`), and `raceView.ts`'s circulation is deliberately constant-rate, not tied to the leader's noisy pace (see its own header comment). There is no real "instantaneous speed" signal to sonify. This mirrors why lap times are already a race-fiction derivation (`raceView.ts:lapTime`) rather than real physics — the engine sound has to be built the same way: from the *shape of the track*, not the sim.
+`RaceEngine` has no sub-lap physics — `progress` advances once per lap as a single scalar (`src/core/RaceEngine.ts:stepLap`), and `raceView.ts`'s circulation is deliberately constant-rate, not tied to the leader's noisy pace (see its own header comment). There is no real "instantaneous speed" signal to sonify. This mirrors why lap times are already a race-fiction derivation (`raceView.ts:lapTime`) rather than real physics — the engine sound has to be built the same way: from the *shape of the track*, not the sim.
 
 ## Non-Goals
 
 - No change to `RaceEngine`, balance, or scoring — audio-only.
 - Player's bike only. AI riders are silent (as they are today); this is not a full engine-mix system for all 10 bikes.
-- No new gameplay mechanic — Orders (Settle/Defend/Attack) already exist and get a very subtle audio read, not new behavior.
+- No new gameplay mechanic — Orders (the existing `Risk` levels, `'low'` / `'medium'` / `'high'`) already exist and get a very subtle audio read, not new behavior.
 
 ---
 
@@ -38,7 +38,7 @@ This split keeps the same boundary the codebase already uses: pure math in `src/
 
 ### Curvature profile
 
-Given a track's `SampledPath` (from `Path.ts`, already built per race), compute a parallel array of curvature magnitude at each sample point: the turn angle between the incoming and outgoing direction vectors, divided by the arc-length step (so curvature is comparable across tracks/segment spacings, not raw angle).
+Given a track's `SampledPath` (from `Path.ts`, already built per race), compute a parallel array of curvature magnitude at each sample point: the turn angle between the incoming and outgoing direction vectors, divided by the arc-length step (so curvature is comparable across tracks/segment spacings, not raw angle). The wraparound sample (last point back to sample 0) uses the path's distinguished closing edge (`total - cum[m-1]` in `Path.ts`) as its arc-length step, not a naive array-index subtraction — reuse that value rather than re-deriving it, to avoid a zero or mismatched step at the wrap index.
 
 ```ts
 export function buildCurvatureProfile(path: SampledPath): number[]
@@ -69,11 +69,11 @@ Computed once per race (in `RaceScene.create`, right after `buildPath`), not per
 
 ### States
 
-- **`accel`** — on a straight, or past a corner's end. Target pitch climbs continuously from a base. Tracks how long (real ms, scaled by playback speed) the current accel run has lasted; every `SHIFT_INTERVAL_MS` (~1100ms at 1×) it emits a `shiftEvent` — a momentary dip-and-recover in the pitch curve — and raises the plateau, capping at 3 shifts before holding at the rev ceiling. A short straight naturally gets 0-1 shifts; a long one gets 2-3, without per-track tuning.
-- **`brake`** — entered when the player's `t` comes within `BRAKE_LOOKAHEAD` (lap-fraction) of a corner zone's `start`. Target pitch drops smoothly, proportional to remaining distance into the zone (closer = lower target, so deceleration reads as continuous, not a snap). Emits a single `brakeEvent` exactly on the state-entry transition (not every frame).
-- **`corner`** — while `t` is inside `[zone.start, zone.end]`. Target pitch holds near a value derived from `zone.peakCurvature` (tighter corner → lower held pitch), plus a small deterministic wobble (`sin` of `t`, not RNG — this is presentation flavor, not simulation, but stays reproducible) so it doesn't feel frozen.
+- **`accel`** — on a straight, or past a corner's end. Target pitch climbs continuously from a base. Tracks how long (real ms, scaled by playback speed) the current accel run has lasted; every `SHIFT_INTERVAL_MS` (~1100ms at 1×) it emits a `shiftEvent` — a momentary dip-and-recover in the pitch curve — and raises the plateau, capping at 3 shifts before holding at the rev ceiling. A short straight naturally gets 0-1 shifts; a long one gets 2-3, without per-track tuning. Entering `accel` from `corner` **resets** the accel-run elapsed timer and shift count to zero — otherwise a player who's already hit 3 shifts before the first corner would never hear a shift again for the rest of the lap.
+- **`brake`** — entered when the player's `t` comes within `BRAKE_LOOKAHEAD` (lap-fraction) of a corner zone's `start`, measured as **circular/modular distance** (not naive subtraction), since both the look-ahead window and a corner zone itself can straddle the `t=1→0` wraparound. Target pitch drops smoothly, proportional to remaining distance into the zone (closer = lower target, so deceleration reads as continuous, not a snap). Emits a single `brakeEvent` exactly on the state-entry transition (not every frame).
+- **`corner`** — while `t` is inside `[zone.start, zone.end]`, where membership is also tested via modular distance so a zone straddling `t=1→0` is handled the same way as any other. Target pitch holds near a value derived from `zone.peakCurvature` (tighter corner → lower held pitch), plus a small deterministic wobble (`sin` of `t`, not RNG — this is presentation flavor, not simulation, but stays reproducible) so it doesn't feel frozen.
 
-Exit is not a separate state: crossing a zone's `end` simply flips the state back to `accel`, and the pitch resumes climbing from wherever it was — the "accelerating out of the corner" feel falls out of the state machine for free.
+Exit is not a separate state: crossing a zone's `end` simply flips the state back to `accel` (resetting the accel-run counters per above), and the pitch resumes climbing from wherever it was — the "accelerating out of the corner" feel falls out of the state machine for free.
 
 ### Step function
 
@@ -83,21 +83,23 @@ export interface EngineFrame { state: 'accel' | 'brake' | 'corner'; targetHz: nu
 
 export function createEngineDynamicsState(): EngineDynamicsState;
 export function stepEngineDynamics(
-  state: EngineDynamicsState, t: number, zones: CornerZone[], risk: Risk, deltaMs: number,
+  state: EngineDynamicsState, t: number, zones: CornerZone[], risk: Risk, deltaMs: number, speed: number,
 ): EngineFrame; // returns the frame directive; mutates state in place for the next call
 ```
+
+`deltaMs` is the raw per-frame delta; `speed` (the existing 1×/2×/4× playback multiplier) is passed separately so the accel-run elapsed timer and any other real-time-scaled internals can apply `deltaMs * speed` explicitly, rather than requiring the caller to pre-scale it.
 
 Called once per animation frame from `RaceScene.update()`, after `renderFrame` has computed the player's current interpolated `t`.
 
 ### Risk coupling (subtle)
 
-Small multipliers only, applied inside `stepEngineDynamics`:
+Small multipliers only, applied inside `stepEngineDynamics`, keyed on the real `Risk` literals (`'high'` reads as the aggressive "Attack" case, `'medium'` as "Defend", `'low'` as "Settle"):
 
 | Risk | Brake look-ahead | Rev ceiling |
 |---|---|---|
-| Attack | ×0.85 (brakes later) | ×1.05 |
-| Defend | ×1.0 (baseline) | ×1.0 |
-| Settle | ×1.15 (brakes earlier) | ×0.95 |
+| `'high'` | ×0.85 (brakes later) | ×1.05 |
+| `'medium'` | ×1.0 (baseline) | ×1.0 |
+| `'low'` | ×1.15 (brakes earlier) | ×0.95 |
 
 The look-ahead multiplier is the *only* brake-shape lever: pitch drops linearly from the accel pitch at zone entry to the corner's held pitch across the look-ahead window, so a shorter window (Attack) compresses the same total drop into less track distance — reading as harder/later braking — without a second, independently-tuned "steepness" constant to keep in sync.
 
@@ -109,17 +111,22 @@ These are read from the existing `season.lastRisk` / live `order` state already 
 
 Extends the persistent-oscillator engine hum fixed on 2026-07-03 (one oscillator + lowpass filter, smooth `setTargetAtTime` re-pitch, fade in/out — no per-frame restart):
 
-- `engineTick(frame: EngineFrame): void` — glides the oscillator toward `frame.targetHz` via `setTargetAtTime` (time constant scaled by playback speed, so shifts/brakes don't feel rushed at 4×); on `shiftEvent`, layers a quick blip (brief frequency dip + a short filtered click, reusing the noise-burst technique from `playCrash`); on `brakeEvent`, triggers a one-shot descending sweep + soft noise burst.
+- `engineTick(frame: EngineFrame, speed: number): void` — glides the oscillator toward `frame.targetHz` via `setTargetAtTime` (time constant scaled by `speed`, so shifts/brakes don't feel rushed at 4×); on `shiftEvent`, layers a quick blip (brief frequency dip + a short filtered click, reusing the noise-burst technique from `playCrash`); on `brakeEvent`, triggers a one-shot descending sweep + soft noise burst.
 - `playGearShift()` / `playBrakeBurst()` — the one-shot layers, callable independently for testing/tuning in the browser.
 
-`RaceScene` replaces its current per-frame `this.soundEngine.playEngine(this.speed)` call with the new `engineTick` call fed by `EngineDynamics`.
+`RaceScene` replaces its current per-frame `this.soundEngine.playEngine(this.speed)` call with the new `engineTick(frame, this.speed)` call fed by `EngineDynamics`.
+
+### Lifecycle
+
+- **Lazy start**: `playEngine` today starts the oscillator on its first call and fades it in (`SoundEngine.ts:32`). `engineTick` preserves this — the first call of the race still triggers the start-with-fade-in path; it's not assumed to be already running.
+- **Player crash**: today `SoundEngine` only stops the oscillator on race finish (`RaceScene.ts:602`); a crash currently leaves the engine hum running under a frozen dot. This design adds `SoundEngine.stallEngine()`: on the player's crash event, `RaceScene` calls it once to glide the pitch down to a low idle and fade to silence over ~400ms, distinct from the finish fade-out. No change for AI crashes (still silent).
 
 ---
 
 ## Testing
 
 - **`tests/trackShape.test.ts`**: synthetic point sets with a known straight segment (near-zero curvature) and a known tight corner (high curvature); assert `buildCurvatureProfile` reflects that shape, and `findCornerZones` recovers the expected zone boundaries (including a zone forced to straddle the `t=1→0` wraparound).
-- **`tests/engineDynamics.test.ts`**: synthetic `CornerZone[]`, no Web Audio involved — assert `accel` state far from any zone, `brake` state (and exactly one `brakeEvent`) once `t` enters the look-ahead window, `corner` state with pitch near the expected value inside zone bounds, `shiftEvent` firing at the expected cadence during a long simulated `accel` run, and the risk-multiplier table above (Attack brakes measurably later/harder than Settle for the same zone).
+- **`tests/engineDynamics.test.ts`**: synthetic `CornerZone[]`, no Web Audio involved — assert `accel` state far from any zone, `brake` state (and exactly one `brakeEvent`) once `t` enters the look-ahead window, `corner` state with pitch near the expected value inside zone bounds, `shiftEvent` firing at the expected cadence during a long simulated `accel` run (including that the shift count/timer reset after a `corner`→`accel` transition), the risk-multiplier table above (`'high'` brakes measurably later/harder than `'low'` for the same zone), and brake-window / corner-membership behavior for a zone forced to straddle `t=1→0` (mirroring the wraparound case in `trackShape.test.ts`, but exercised through `stepEngineDynamics` rather than `findCornerZones`).
 - `SoundEngine` playback stays manually/browser-verified (`npm run dev`, listen), consistent with today — Node has no `AudioContext`.
 - Full regression: `npm run test`, `npm run build`, and a headless browser pass (`tools/app-flow.test.mjs` / `tools/full-season.test.mjs`) confirming no console/page errors with the new per-frame audio calls.
 
