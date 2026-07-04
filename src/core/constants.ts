@@ -54,7 +54,7 @@ export const DRAFT_BONUS = 0.3;       // progress-points/lap tow for a rider wit
 export const FIELD_COMPRESSION = 0.35;
 export const WET_CRASH_MULT = 1.4;   // multiplier for crash probability in wet weather
 export const GRID_SPACING = 0.15;   // progress units per grid position for qualifying offset
-export const RACE_ANIM_SECONDS = 32;           // 1× ≈ 4s/lap; speed control scales it (continuous motion)
+export const RACE_ANIM_SECONDS = 64;           // 1× ≈ 8s/lap; speed control scales it (continuous motion)
 export const RACE_SPEEDS: readonly number[] = [1, 2, 4];
 
 // Race-day view (gap-train + lap times). See docs/superpowers/specs/2026-06-16-race-view-overhaul-design.md.
@@ -72,11 +72,17 @@ export const BRAND_COLORS: Record<string, number> = {
   vortex: 0xff9800,   // orange
 };
 
-// Tire compounds
+// Tire compounds. Tuned for the 8-lap race: soft is ~dead at the flag (96% wear),
+// medium ~58%, hard ~36%. Grip values are set so the three compounds land within
+// ~0.5 total progress of each other over a full race (near-equal totals; the choice
+// is about SHAPE — soft = early pace + late cliff/crash risk, hard = flat and safe).
 export const TIRE_COMPOUNDS: Record<TireCompound, { grip: number; durability: number; label: string; color: number }> = {
-  soft:             { grip: 1.15, durability: 3.0, label: 'Soft',   color: 0xff0000 },
+  soft:             { grip: 1.20, durability: 3.0, label: 'Soft',   color: 0xff0000 },
   medium:         { grip: 1.05, durability: 5.0, label: 'Medium',  color: 0xffffff },
-  hard:             { grip: 1.00, durability: 8.0, label: 'Hard',   color: 0xffaa00 },
+  hard:             { grip: 1.02, durability: 8.0, label: 'Hard',   color: 0xffaa00 },
 };
-export const TIRE_WEAR_PER_LAP_BASE = 1.5;
+export const TIRE_WEAR_PER_LAP_BASE = 36;   // %-wear per lap divided by compound durability
+// Converts the grip multiplier into an additive pace term inside the compressed
+// deviation (like PUSH_BONUS): tirePace = TIRE_PACE_SCALE * (grip - 1).
+export const TIRE_PACE_SCALE = 3.0;
 export const TIRE_COMPOUNDS_LIST: readonly TireCompound[] = ['soft', 'medium', 'hard'];

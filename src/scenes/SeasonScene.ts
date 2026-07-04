@@ -27,12 +27,13 @@ export class SeasonScene extends Phaser.Scene {
   private bikeText!: Phaser.GameObjects.Text;
   private rndText!: Phaser.GameObjects.Text;
   private moneyText!: Phaser.GameObjects.Text;
-  private bikeButtons: { plus: Phaser.GameObjects.Text; cost: Phaser.GameObjects.Text }[] = [];
+  private bikeButtons: { plus: Phaser.GameObjects.Text; param: BikeParam }[] = [];
 
   constructor() { super('SeasonScene'); }
   init(data: { season: SeasonState; career?: CareerState }): void {
     this.season = data.season;
     this.career = data.career ?? { player: data.season.playerRider, field: data.season.aiRiders, money: 0 } as CareerState;
+    this.bikeButtons = []; // scene objects from a previous visit are destroyed — drop them
   }
 
   private drawBackground(): void {
@@ -87,7 +88,7 @@ export class SeasonScene extends Phaser.Scene {
       const x = 44 + i * 160;
       const cost = bikeUpgradeCost(this.season.playerRider.bike[param]);
       const plus = this.add.text(x, 296, `[+] ${param} (${cost})`, { fontFamily: THEME.fontFamily, fontSize: '15px', color: THEME.green }).setInteractive({ useHandCursor: true });
-      this.bikeButtons.push({ plus, cost: this.add.text(x + 90, 296, '', { fontFamily: THEME.fontFamily, fontSize: '12px', color: THEME.muted }) });
+      this.bikeButtons.push({ plus, param });
       plus.on('pointerup', () => {
         if (investBikePoint(this.season.playerRider, param)) { sound.playClick(); this.refreshBike(); this.refreshBikeButtons(); }
       });
@@ -105,7 +106,7 @@ export class SeasonScene extends Phaser.Scene {
       this.setupBoxes[st] = box;
     });
     const recIdx = SETUPS.indexOf(this.setup);
-    this.add.text(130 + recIdx * 200, 368, '* Recommended', { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold }).setOrigin(0.5);
+    this.add.text(130 + recIdx * 200, 356, '* Recommended', { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold }).setOrigin(0.5);
     this.refreshSelectors();
 
     // Tire compound selector.
@@ -129,7 +130,7 @@ export class SeasonScene extends Phaser.Scene {
     this.drawPanel(688, 16, 320, 480);
     this.add.text(708, 30, 'CHAMPIONSHIP', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     renderStandings(this, 696, 58, getStandings(this.season), { showGap: true });
-    this.add.text(708, 304, 'Starting Grid', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    this.add.text(708, 304, 'Entry List (grid set in qualifying)', { fontFamily: THEME.fontFamily, fontSize: '15px', color: THEME.gold, fontStyle: 'bold' });
     this.showStartingGrid(708, 332);
 
     new Button(this, { x: 354, y: 560, width: 280, height: 56, label: 'GO TO GRID', onClick: () => { sound.playClick(); this.simulate(); } });
@@ -145,12 +146,13 @@ export class SeasonScene extends Phaser.Scene {
 
   private refreshMoney(): void { this.moneyText.setText(`Money: ${formatMoney(this.career.money)}`); }
   private refreshBikeButtons(): void {
-    (['speed', 'handling', 'acceleration'] as BikeParam[]).forEach((param, i) => {
-      if (this.bikeButtons[i]) {
-        const cost = bikeUpgradeCost(this.season.playerRider.bike[param]);
-        this.bikeButtons[i].cost.setText(cost > this.season.playerRider.rndPoints ? 'X' : '');
-      }
-    });
+    // Unaffordable upgrades gray out (no overlay glyphs — they collided with the labels).
+    for (const { plus, param } of this.bikeButtons) {
+      const cost = bikeUpgradeCost(this.season.playerRider.bike[param]);
+      const affordable = cost <= this.season.playerRider.rndPoints;
+      plus.setText(`[+] ${param} (${cost})`);
+      plus.setColor(affordable ? THEME.green : THEME.muted).setAlpha(affordable ? 1 : 0.55);
+    }
   }
   private refreshBike(): void {
     const b = this.season.playerRider.bike;

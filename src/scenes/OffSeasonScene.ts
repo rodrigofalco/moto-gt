@@ -13,10 +13,11 @@ export class OffSeasonScene extends Phaser.Scene {
 
   constructor() { super('OffSeasonScene'); }
 
-  init(data: { career: CareerState }): void {
+  init(data: { career: CareerState; report?: OffSeasonReport }): void {
     this.career = data.career;
-    const rng = new RNG((Date.now() ^ this.career.seasonNumber) >>> 0);
-    this.report = runOffSeason(this.career, rng);
+    // The caller (RaceResultScene) already ran the off-season and passes the report;
+    // re-running it here would age/churn the field twice. Only run it as a fallback.
+    this.report = data.report ?? runOffSeason(this.career, new RNG((Date.now() ^ this.career.seasonNumber) >>> 0));
      }
 
   create(): void {
@@ -43,10 +44,10 @@ export class OffSeasonScene extends Phaser.Scene {
     this.drawPanel(212, rosterY, 600, 120);
     this.add.text(232, rosterY + 14, 'ROSTER CHANGES', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     if (this.report.retired.length > 0) {
-      this.add.text(232, rosterY + 42, `Retired: ${this.report.retired.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.red });
+      this.add.text(232, rosterY + 40, `Retired: ${this.report.retired.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.red, wordWrap: { width: 560 } });
     }
     if (this.report.rookies.length > 0) {
-      this.add.text(232, rosterY + 68, `New rookies: ${this.report.rookies.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.blue });
+      this.add.text(232, rosterY + 76, `New rookies: ${this.report.rookies.join(', ')}`, { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.blue, wordWrap: { width: 560 } });
     }
     if (this.report.retired.length === 0 && this.report.rookies.length === 0) {
       this.add.text(232, rosterY + 42, 'No roster changes this off-season.', { fontFamily: THEME.fontFamily, fontSize: '14px', color: THEME.muted });
@@ -54,9 +55,12 @@ export class OffSeasonScene extends Phaser.Scene {
 
     if (this.report.statChanges.length > 0) {
       const statsY = rosterY + 140;
-      this.drawPanel(212, statsY, 600, 110);
+      this.drawPanel(212, statsY, 600, 130);
       this.add.text(232, statsY + 14, 'STAT CHANGES', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
-      const notes = this.report.statChanges.slice(0, 5).map((s) => `${s.riderId}: ${s.note}`);
+      // Notes already carry the rider's display name — no raw ids.
+      const notes = this.report.statChanges.slice(0, 5).map((s) => s.note);
+      const extra = this.report.statChanges.length - 5;
+      if (extra > 0) notes.push(`…and ${extra} more`);
       this.add.text(232, statsY + 42, notes.join('\n'), { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.muted, wordWrap: { width: 560 } });
     }
 

@@ -1,5 +1,5 @@
 import { getStandings, getChampion } from './Championship';
-import { nextTier } from '../data/tiers';
+import { getTier, nextTier } from '../data/tiers';
 import { createRookie } from '../core/factories/RiderFactory';
 import type { CareerState, OffSeasonReport, Rider } from './types';
 import type { RNG } from './RNG';
@@ -17,11 +17,21 @@ export function runOffSeason(career: CareerState, rng: RNG): OffSeasonReport {
   const champion = career.season ? getChampion(career.season).name : 'N/A';
   const playerFinish = standings.findIndex((r) => r.isPlayer) + 1;
   let promoted = false;
+  const statChanges: OffSeasonReport['statChanges'] = [];
   if (playerFinish <= 3 && career.tierId !== 'factory') {
     career.tierId = nextTier(career.tierId);
     promoted = true;
+    // Stepping up a class: the whole AI field is one notch stronger (each tier's
+    // aiStatBonus is +1 over the previous). Bump each rider's weakest skill.
+    for (const rider of career.field) {
+      const keys = (Object.keys(rider.skills) as (keyof Rider['skills'])[]).filter((k) => rider.skills[k] < 10);
+      if (keys.length > 0) {
+        const weakest = keys.sort((a, b) => rider.skills[a] - rider.skills[b])[0];
+        rider.skills[weakest] += 1;
       }
-  const statChanges: OffSeasonReport['statChanges'] = [];
+    }
+    statChanges.push({ riderId: 'field', note: `The rivals raise their game for the ${getTier(career.tierId).name} class (+1 skill each)` });
+      }
 
   // Age all riders
   const allRiders = [career.player, ...career.field];
@@ -58,8 +68,9 @@ export function runOffSeason(career: CareerState, rng: RNG): OffSeasonReport {
 
     // Generate rookies to fill the spots
   const rookies: Rider[] = [];
+  const tierBonus = getTier(career.tierId).aiStatBonus;
   for (let i = 0; i < retireCount; i++) {
-    rookies.push(createRookie(0, rng));
+    rookies.push(createRookie(tierBonus, rng));
    }
   const rookieNames = rookies.map((r) => r.name);
 

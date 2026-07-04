@@ -140,8 +140,8 @@ try {
     console.log('\n[4/5] Race — wait for race to progress, then SKIP to results');
     await page.waitForTimeout(4000);
     await shot('4-race-progress');
-    // SKIP button at (930, 670) in RaceScene.
-    await page.mouse.click(...toScreen(930, 670));
+    // SKIP button at (930, 700) in RaceScene.
+    await page.mouse.click(...toScreen(930, 700));
     await page.waitForFunction(
       () => ['RaceResultScene', 'SeasonScene'].includes(window.__currentScene()),
       null, { timeout: 12000 },

@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 import { buildPath, pointAt, type SampledPath } from '../core/Path';
 import { TRACK_LAYOUTS } from '../data/trackLayouts';
 import { RACE_LAPS, RACE_ANIM_SECONDS, RACE_SPEEDS, BRAND_COLORS, MIN_SEP, MAX_STEP, MAX_SPREAD, LAP_TIME_BASE, LAP_TIME_SPREAD } from '../core/constants';
-import { stepLap, finalizeRace, type RaceRun } from '../core/RaceEngine';
+import { stepLap, finalizeRace, hasDraftTow, type RaceRun } from '../core/RaceEngine';
 import { trainLayout, lapTime, formatLapTime, type TrainEntry } from '../core/raceView';
 import { applyProgression } from '../core/Progression';
 import { applyRaceResult } from '../core/Championship';
@@ -12,10 +12,10 @@ import { SoundEngine } from '../core/SoundEngine';
 import { saveCareer } from '../core/CareerStore';
 import { prizeFor } from '../core/Economy';
 import { generateCommentary } from '../core/Commentary';
-import { calcTireWear, getTireGrip, getCompoundColor, getCompoundLabel } from '../core/TireModel';
-import type { TireCompound } from '../core/types';
+import { getCompoundColor, getCompoundLabel } from '../core/TireModel';
+import { ellipsize } from '../ui/text';
 
-import type { SeasonState, Risk, CareerState, RaceSnapshot, CommentaryEvent } from '../core/types';
+import type { SeasonState, Risk, CareerState, RaceSnapshot, CommentaryEvent, CommentaryType } from '../core/types';
 
 const OX = 70, OY = 110, W = 560, H = 470;
 const ORDER: { risk: Risk; label: string }[] = [
@@ -23,7 +23,13 @@ const ORDER: { risk: Risk; label: string }[] = [
 ];
 
 interface SceneData { season: SeasonState; run: RaceRun; career?: CareerState; grid?: string[]; }
-interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; }
+interface DotGfx { dot: Phaser.GameObjects.Arc; ring?: Phaser.GameObjects.Arc; num: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Arc; }
+interface RainDrop { x: number; y: number; len: number; sp: number; }
+
+const COMMENTARY_COLOR: Partial<Record<CommentaryType, string>> = {
+  crash: '#ff5f7a', overtake: '#00c853', battle: '#ffb74d', tire: '#ffd54f',
+  fastest_lap: '#d500f9', lead_change: '#9ad0ff',
+};
 
 export class RaceScene extends Phaser.Scene {
   private sd!: SceneData;
@@ -39,7 +45,8 @@ export class RaceScene extends Phaser.Scene {
   private order: Risk = 'medium';
   private done = false;
   private lapText!: Phaser.GameObjects.Text;
-  private orderText!: Phaser.GameObjects.Text;
+  private rowTexts: Phaser.GameObjects.Text[] = [];
+  private posArrows: Map<string, string> = new Map();
   private orderBoxes: Phaser.GameObjects.Rectangle[] = [];
   private speedBoxes: Phaser.GameObjects.Rectangle[] = [];
   private placeBehind: Map<string, number> = new Map();   // smoothed train spacing (loop fraction) per rider
@@ -57,13 +64,15 @@ export class RaceScene extends Phaser.Scene {
   private soundEngine!: SoundEngine;
   private muteBtn!: Phaser.GameObjects.Text;
   private career: CareerState | null = null;
-  private commentaryText!: Phaser.GameObjects.Text;
+  private feedTexts: Phaser.GameObjects.Text[] = [];
+  private feed: CommentaryEvent[] = [];
   private commentaryQueue: CommentaryEvent[] = [];
   private commentaryTimer = 0;
-  private compounds: Map<string, TireCompound> = new Map();
-  private wear: Map<string, number> = new Map();
   private tireText!: Phaser.GameObjects.Text;
+  private tireWearText!: Phaser.GameObjects.Text;
   private prevSnapshot!: RaceSnapshot;
+  private rainDrops: RainDrop[] = [];
+  private rainG: Phaser.GameObjects.Graphics | null = null;
 
   constructor() { super('RaceScene'); }
   init(data: SceneData): void {
@@ -75,13 +84,9 @@ export class RaceScene extends Phaser.Scene {
     this.career = data.career ?? null;
     this.commentaryQueue = [];
     this.commentaryTimer = 0;
-    this.compounds = new Map();
-    this.wear = new Map();
-    const playerCompound = data.season.lastCompound ?? 'medium';
-    for (const s of data.run.states) {
-      this.compounds.set(s.rider.id, s.rider.isPlayer ? playerCompound : 'medium');
-      this.wear.set(s.rider.id, 0);
-    }
+    this.feed = []; this.feedTexts = []; this.rowTexts = [];
+    this.posArrows = new Map();
+    this.rainDrops = []; this.rainG = null;
    }
 
   create(): void {
@@ -104,10 +109,12 @@ export class RaceScene extends Phaser.Scene {
     for (const s of run.states) {
       const r = s.rider;
       const color = BRAND_COLORS[r.brandId] ?? 0x4fc3f7;
+      // Slipstream glow: soft halo shown while this rider is getting a draft tow.
+      const glow = this.add.circle(OX, OY, 14, 0x00e5ff, 0.18).setVisible(false);
       const ring = r.isPlayer ? this.add.circle(OX, OY, 15).setStrokeStyle(4, 0xf5c518) : undefined;
       const dot = this.add.circle(OX, OY, r.isPlayer ? 9 : 7, color).setStrokeStyle(2, 0x1a1a2e);
       const num = this.add.text(OX, OY, String(this.numbers.get(r.id)), { fontSize: '11px', color: '#0b0b14', fontStyle: 'bold' }).setOrigin(0.5);
-      this.gfx.set(r.id, { dot, ring, num });
+      this.gfx.set(r.id, { dot, ring, num, glow });
       this.prev.set(r.id, 0);
       this.cur.set(r.id, 0);
       this.placeBehind.set(r.id, 0);
@@ -122,37 +129,46 @@ export class RaceScene extends Phaser.Scene {
     this.drawPanel(688, 64, 316, 486);
     this.add.text(704, 80, 'LIVE TIMING', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     this.tireText = this.add.text(704, 104, '', { fontFamily: THEME.fontFamily, fontSize: '13px', color: '#e0e0e0' });
+    this.tireWearText = this.add.text(830, 104, '', { fontFamily: THEME.fontFamily, fontSize: '13px', color: '#00c853', fontStyle: 'bold' });
     this.lapText = this.add.text(704, 124, '', { fontSize: '20px', color: '#f5c518' });
     this.playerLapText = this.add.text(704, 148, '', { fontSize: '14px', color: '#9ad0ff' });
-    this.orderText = this.add.text(704, 172, '', { fontFamily: 'monospace', fontSize: '13px', color: '#e0e0e0' });
+    for (let i = 0; i < this.sd.run.states.length; i++) {
+      this.rowTexts.push(this.add.text(704, 172 + i * 16, '', { fontFamily: 'monospace', fontSize: '12px', color: '#e0e0e0' }));
+    }
     this.flText = this.add.text(704, 336, '', { fontFamily: 'monospace', fontSize: '13px', color: '#d500f9' });
-    this.drawPanel(56, 540, 624, 70);
+
+    // Commentary feed: the last 3 events, newest at the bottom, older lines fading out.
+    this.drawPanel(56, 540, 624, 104);
     this.add.text(72, 548, 'COMMENTARY', { fontFamily: THEME.fontFamily, fontSize: '13px', color: THEME.gold, fontStyle: 'bold' });
-    this.commentaryText = this.add.text(72, 566, '', { fontFamily: THEME.fontFamily, fontSize: '14px', color: '#f5c518', wordWrap: { width: 592 } }).setAlpha(0.9);
-    this.calloutText = this.add.text(72, 588, '', { fontSize: '16px', color: '#00e5ff' });
-    this.flashText = this.add.text(370, 582, '', { fontSize: '18px', color: '#00c853', fontStyle: 'bold' }).setOrigin(0, 0.5).setAlpha(0);
+    for (let i = 0; i < 3; i++) {
+      this.feedTexts.push(this.add.text(72, 566 + i * 18, '', { fontFamily: THEME.fontFamily, fontSize: '14px', color: '#f5c518' }));
+    }
+    this.calloutText = this.add.text(72, 622, '', { fontSize: '15px', color: '#00e5ff' });
+    this.flashText = this.add.text(480, 629, '', { fontSize: '17px', color: '#00c853', fontStyle: 'bold' }).setOrigin(0, 0.5).setAlpha(0);
 
     // Order radio (live risk).
-    this.drawPanel(56, 626, 476, 86);
-    this.add.text(70, 634, 'Orders', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    this.drawPanel(56, 656, 476, 86);
+    this.add.text(70, 668, 'Orders', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     ORDER.forEach((o, i) => {
-      const box = this.add.rectangle(140 + i * 150, 662, 140, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(140 + i * 150, 662, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(200 + i * 122, 696, 112, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(200 + i * 122, 696, o.label, { fontSize: '15px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { this.order = o.risk; this.sd.season.lastRisk = o.risk; this.refreshOrder(); });
       this.orderBoxes.push(box);
     });
     this.refreshOrder();
 
     // Speed control.
-    this.drawPanel(552, 626, 280, 86);
-    this.add.text(566, 634, 'Speed', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
+    this.drawPanel(552, 656, 280, 86);
+    this.add.text(566, 668, 'Speed', { fontFamily: THEME.fontFamily, fontSize: '16px', color: THEME.gold, fontStyle: 'bold' });
     RACE_SPEEDS.forEach((sp, i) => {
-      const box = this.add.rectangle(680 + i * 70, 662, 60, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
-      this.add.text(680 + i * 70, 662, `${sp}x`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+      const box = this.add.rectangle(680 + i * 70, 696, 60, 34, 0x16213e).setStrokeStyle(2, 0x0f3460).setInteractive({ useHandCursor: true });
+      this.add.text(680 + i * 70, 696, `${sp}x`, { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
       box.on('pointerup', () => { this.speed = sp; this.refreshSpeed(); });
       this.speedBoxes.push(box);
     });
     this.refreshSpeed();
+
+    if (weather === 'wet') this.createRain();
 
      // Mute button (top-right speaker icon).
     this.soundEngine = (this.game as unknown as { __soundEngine: SoundEngine }).__soundEngine;
@@ -163,9 +179,12 @@ export class RaceScene extends Phaser.Scene {
      });
 
     this.drawLegend();
-    new Button(this, { x: 930, y: 670, width: 140, height: 44, label: 'SKIP', onClick: () => this.skip() });
-    // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
+    new Button(this, { x: 930, y: 700, width: 140, height: 44, label: 'SKIP', onClick: () => this.skip() });
+    // Place everyone on the grid BEFORE lap 1 resolves, so a lap-1 crasher's dot has a
+    // real on-track position to freeze at (not the sprite's init position).
     this.prevSnapshot = this.buildSnapshot();
+    this.renderFrame(0);
+    // Prime lap 1 so dots roll from the gun (prev=grid, cur=lap1) — no frozen opening lap.
     this.advanceOneLap();
     this.renderFrame(0);
   }
@@ -179,7 +198,7 @@ export class RaceScene extends Phaser.Scene {
       this.add.circle(lx, ly, 5, color);
       this.add.text(lx + 12, ly, name, { fontSize: '13px', color: '#e0e0e0' }).setOrigin(0, 0.5);
     });
-    this.add.text(704, 448, "Gold ring = you  ·  cyan ring = the rider you're chasing", { fontFamily: THEME.fontFamily, fontSize: '12px', color: '#94a3b8', wordWrap: { width: 284 } });
+    this.add.text(704, 442, "Gold ring = you  ·  cyan ring = the rider you're chasing  ·  glow = slipstream tow", { fontFamily: THEME.fontFamily, fontSize: '12px', color: '#94a3b8', wordWrap: { width: 284 } });
   }
 
   private refreshOrder(): void {
@@ -205,17 +224,51 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private drawTrack(): void {
+    const wet = this.sd.run.weather === 'wet';
     const g = this.add.graphics();
     const pts = this.path.samples.map((p) => new Phaser.Math.Vector2(OX + p.x * W, OY + p.y * H));
-    // Grass/outer curb.
-    g.lineStyle(26, 0x1b5e20); g.strokePoints(pts, true, true);
+    // Grass/outer curb (darker, colder under rain).
+    g.lineStyle(26, wet ? 0x12401a : 0x1b5e20); g.strokePoints(pts, true, true);
     // Alternating curb segments on curves.
-    g.lineStyle(18, 0xc62828); g.strokePoints(pts, true, true);
-    g.lineStyle(18, 0xffffff); g.strokePoints(pts, true, true);
-    // Asphalt surface.
-    g.lineStyle(14, 0x263238); g.strokePoints(pts, true, true);
+    g.lineStyle(18, wet ? 0x8e2020 : 0xc62828); g.strokePoints(pts, true, true);
+    g.lineStyle(18, wet ? 0xb8c4cc : 0xffffff); g.strokePoints(pts, true, true);
+    // Asphalt surface — blue-dark sheen when wet.
+    g.lineStyle(14, wet ? 0x1e3a4a : 0x263238); g.strokePoints(pts, true, true);
     // Inner edge line.
-    g.lineStyle(2, 0xffffff, 0.35); g.strokePoints(pts, true, true);
+    g.lineStyle(2, 0xffffff, wet ? 0.2 : 0.35); g.strokePoints(pts, true, true);
+    if (wet) {
+      // Standing-water glints along the racing line.
+      const glint = this.add.graphics();
+      glint.lineStyle(4, 0x4fc3f7, 0.12);
+      glint.strokePoints(pts, true, true);
+    }
+  }
+
+  // Lightweight rain layer: diagonal streaks over the track viewport, redrawn per frame.
+  private createRain(): void {
+    for (let i = 0; i < 70; i++) {
+      this.rainDrops.push({
+        x: OX - 40 + ((i * 137) % (W + 80)),
+        y: OY - 20 + ((i * 89) % (H + 40)),
+        len: 8 + (i % 5) * 2,
+        sp: 0.5 + (i % 4) * 0.15,
+      });
+    }
+    this.rainG = this.add.graphics();
+  }
+
+  private updateRain(delta: number): void {
+    if (!this.rainG) return;
+    this.rainG.clear();
+    this.rainG.lineStyle(1, 0x9ad0ff, 0.35);
+    for (const d of this.rainDrops) {
+      d.y += d.sp * delta;
+      d.x -= d.sp * delta * 0.25;
+      if (d.y > OY + H + 20) { d.y = OY - 20; d.x = OX - 40 + Math.abs((d.x * 7919) % (W + 80)); }
+      if (d.x < OX - 40) d.x += W + 80;
+      if (d.y > OY + H + 20) continue; // big frame delta can overshoot; skip the stray frame
+      this.rainG.lineBetween(d.x, d.y, d.x + d.len * 0.25, d.y - d.len);
+    }
   }
 
   // Checkered start/finish bar across the track at t=0, perpendicular to the racing line.
@@ -245,12 +298,22 @@ export class RaceScene extends Phaser.Scene {
     this.prevSnapshot = this.buildSnapshot();
     const preCrashed = new Set(this.sd.run.states.filter((s) => s.crashed).map((s) => s.rider.id));
     stepLap(this.sd.run, this.order);
-    this.applyTireWearAndGrip();
-    const newCrash = this.sd.run.states.some((s) => s.crashed && !preCrashed.has(s.rider.id));
-    if (newCrash) this.soundEngine.playCrash();
+    const crashers = this.sd.run.states.filter((s) => s.crashed && !preCrashed.has(s.rider.id));
+    if (crashers.length > 0) {
+      this.soundEngine.playCrash();
+      for (const s of crashers) this.spawnCrashEffect(s.rider.id);
+    }
     this.snapshot(this.cur);
     this.lapsDone += 1;
-    this.commentaryQueue.push(...generateCommentary(this.prevSnapshot, this.buildSnapshot()));
+    const curSnap = this.buildSnapshot();
+    this.commentaryQueue.push(...generateCommentary(this.prevSnapshot, curSnap));
+    // Live position arrows: movement vs the previous lap, shown until the next lap.
+    this.posArrows.clear();
+    for (const [id, pos] of curSnap.positions.entries()) {
+      const pp = this.prevSnapshot.positions.get(id);
+      this.posArrows.set(id, pp === undefined || pp === pos || curSnap.crashed.has(id) ? ' ' : pos < pp ? '▲' : '▼');
+    }
+    if (this.lapsDone === RACE_LAPS) this.showFinalLapBanner();
     // Record each rider's lap time from the progress gained this lap (skip crash laps).
     for (const s of this.sd.run.states) {
       if (s.crashed) continue;
@@ -274,6 +337,14 @@ export class RaceScene extends Phaser.Scene {
     const positions = new Map(order.map((s, i) => [s.rider.id, i + 1]));
     const riders = states.map((s) => ({ id: s.rider.id, name: s.rider.name }));
     const crashed = new Set(states.filter((s) => s.crashed).map((s) => s.rider.id));
+    // Gap (race-fiction seconds) to the rider directly ahead — drives battle commentary.
+    const gapAheadSec = new Map<string, number>();
+    order.forEach((s, i) => {
+      if (i === 0 || s.crashed) return;
+      const ahead = order[i - 1];
+      if (ahead.crashed) return;
+      gapAheadSec.set(s.rider.id, Math.max(0, (this.raceTime.get(s.rider.id) ?? 0) - (this.raceTime.get(ahead.rider.id) ?? 0)));
+    });
     const fastestLap = this.fastest ? { id: this.fastest.id, time: formatLapTime(this.fastest.time) } : null;
     const overtakeBy = new Map<string, string>();
     if (this.prevSnapshot) {
@@ -294,39 +365,74 @@ export class RaceScene extends Phaser.Scene {
       riders,
       crashed,
       fastestLap,
-      tireWear: new Map(this.wear),
+      tireWear: new Map(states.map((s) => [s.rider.id, s.tireWear])),
       overtookBy: new Map(),
       overtakeBy,
+      gapAheadSec,
     };
   }
 
-  private applyTireWearAndGrip(): void {
-    for (const s of this.sd.run.states) {
-      if (s.crashed) continue;
-      const id = s.rider.id;
-      const compound = this.compounds.get(id) ?? 'medium';
-      const prevProgress = this.prev.get(id) ?? 0;
-      const consistency = s.rider.skills.consistency;
-      const newWear = calcTireWear(this.lapsDone + 1, compound, consistency);
-      this.wear.set(id, newWear);
-      const grip = getTireGrip(newWear, compound);
-      const gain = s.progress - prevProgress;
-      if (gain > 0.01) s.progress = prevProgress + gain * grip;
-    }
+  // Crash moment: shake, expanding shockwave ring, skid mark, and an ✕ over the dot.
+  private spawnCrashEffect(riderId: string): void {
+    const g = this.gfx.get(riderId);
+    if (!g) return;
+    const { x, y } = g.dot;
+    this.cameras.main.shake(180, 0.004);
+    const wave = this.add.circle(x, y, 6).setStrokeStyle(3, 0xff1744, 0.9);
+    this.tweens.add({ targets: wave, radius: 30, alpha: 0, duration: 550, ease: 'Quad.easeOut', onComplete: () => wave.destroy() });
+    const skid = this.add.graphics();
+    skid.lineStyle(3, 0x0b0b14, 0.7);
+    skid.lineBetween(x - 10, y + 4, x + 6, y - 3);
+    skid.lineBetween(x - 8, y + 8, x + 8, y + 1);
+    this.tweens.add({ targets: skid, alpha: 0.25, duration: 3000, ease: 'Quad.easeOut' });
+    const mark = this.add.text(x, y - 14, '✕', { fontSize: '14px', color: '#ff5f7a', fontStyle: 'bold' }).setOrigin(0.5);
+    this.tweens.add({ targets: mark, alpha: 0.6, y: y - 18, duration: 1200, ease: 'Quad.easeOut' });
+  }
+
+  private showFinalLapBanner(): void {
+    const banner = this.add.text(OX + W / 2, OY + 60, 'FINAL LAP', {
+      fontFamily: THEME.fontFamily, fontSize: '42px', color: '#f5c518', fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0).setScale(0.6);
+    this.tweens.add({
+      targets: banner, alpha: 1, scale: 1.05, duration: 350, ease: 'Back.easeOut',
+      onComplete: () => this.tweens.add({ targets: banner, alpha: 0, duration: 900, delay: 1200, onComplete: () => banner.destroy() }),
+    });
+  }
+
+  // Checkered-flag flourish at the moment the race ends, before the results scene.
+  private showFinishFlourish(): void {
+    const flag = this.add.text(OX + W / 2, OY + H / 2 - 30, '🏁', { fontSize: '64px' }).setOrigin(0.5).setAlpha(0).setScale(0.4);
+    this.tweens.add({ targets: flag, alpha: 1, scale: 1.2, duration: 400, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: flag, angle: { from: -8, to: 8 }, duration: 180, yoyo: true, repeat: 5 });
+    const playerPos = this.buildSnapshot().positions.get(this.sd.season.playerRider.id);
+    const label = playerPos ? `You finish P${playerPos}!` : 'Race complete!';
+    const sub = this.add.text(OX + W / 2, OY + H / 2 + 34, label, {
+      fontFamily: THEME.fontFamily, fontSize: '24px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: sub, alpha: 1, duration: 400, delay: 250 });
   }
 
   private updateCommentary(delta: number): void {
-    if (this.commentaryQueue.length === 0) {
-      this.commentaryText.setText('');
-      return;
-    }
+    if (this.commentaryQueue.length === 0) return;
     this.commentaryTimer += delta;
-    if (this.commentaryTimer > 2200) {
-      this.commentaryTimer = 0;
-      this.commentaryQueue.shift();
+    // Feed pacing scales with playback speed; drains faster when a burst queues up
+    // so no event is silently dropped.
+    const dwell = (this.commentaryQueue.length > 2 ? 700 : 1500) / this.speed;
+    if (this.commentaryTimer < dwell && this.feed.length > 0) return;
+    this.commentaryTimer = 0;
+    this.feed.push(this.commentaryQueue.shift()!);
+    if (this.feed.length > 3) this.feed.shift();
+    // Newest line at the bottom, older lines fading out above it.
+    const ALPHAS = [0.35, 0.6, 1];
+    const start = 3 - this.feed.length;
+    for (let i = 0; i < 3; i++) {
+      const ev = this.feed[i - start];
+      const t = this.feedTexts[i];
+      if (!ev) { t.setText(''); continue; }
+      t.setText(ellipsize(ev.text, 68));
+      t.setColor(COMMENTARY_COLOR[ev.type] ?? '#f5c518');
+      t.setAlpha(ALPHAS[i]);
     }
-    const ev = this.commentaryQueue[0];
-    this.commentaryText.setText(ev ? ev.text : '');
   }
 
   private applyDotNudge(screen: Map<string, { x: number; y: number; t: number }>): void {
@@ -391,13 +497,18 @@ export class RaceScene extends Phaser.Scene {
       screen.set(id, { x: sx, y: sy, t });
     }
     this.applyDotNudge(screen);
-    for (const s of states) {
+    // Slipstream tows on the interpolated positions: towed riders get a glow halo.
+    const progressArr = states.map((s) => trueP.get(s.rider.id)!);
+    const crashedArr = states.map((s) => s.crashed);
+    for (let i = 0; i < states.length; i++) {
+      const s = states[i];
       const id = s.rider.id;
       const g = this.gfx.get(id)!;
-      if (s.crashed) continue;
+      if (s.crashed) { g.glow.setVisible(false); continue; }
       const pos = screen.get(id)!;
       g.dot.setPosition(pos.x, pos.y); g.num.setPosition(pos.x, pos.y);
       if (g.ring) g.ring.setPosition(pos.x, pos.y);
+      g.glow.setPosition(pos.x, pos.y).setVisible(hasDraftTow(progressArr, crashedArr, i));
     }
 
     // Leaderboard — real progress (the same key the result uses), gaps on the race-fiction clock.
@@ -408,9 +519,12 @@ export class RaceScene extends Phaser.Scene {
     const playerIdx = order.findIndex((s) => s.rider.isPlayer);
 
     const pLast = this.lastLap.get(this.sd.season.playerRider.id);
-    const playerCompound = this.compounds.get(this.sd.season.playerRider.id) ?? 'medium';
-    const playerWear = Math.round(this.wear.get(this.sd.season.playerRider.id) ?? 0);
-    this.tireText.setText(`Tires: ${getCompoundLabel(playerCompound)} ${playerWear}%`).setColor(hex(getCompoundColor(playerCompound)));
+    const playerState = states.find((s) => s.rider.isPlayer)!;
+    const playerWear = Math.round(playerState.tireWear);
+    this.tireText.setText(`Tires: ${getCompoundLabel(playerState.compound)}`).setColor(hex(getCompoundColor(playerState.compound)));
+    // Wear reads as a traffic light: fine → managing → critical.
+    const wearColor = playerWear < 50 ? '#00c853' : playerWear < 75 ? '#ffd54f' : '#ff5f7a';
+    this.tireWearText.setText(`${playerWear}% worn`).setColor(wearColor);
     this.lapText.setText(`Lap ${Math.min(RACE_LAPS, this.lapsDone)} / ${RACE_LAPS}`);
     this.playerLapText.setText(`Last lap: ${pLast ? formatLapTime(pLast) : '—'}`);
 
@@ -418,7 +532,7 @@ export class RaceScene extends Phaser.Scene {
     // gap of "+2.4" is consistent with the lap times shown; a full lap behind reads "+1 LAP".
     const leaderTime = this.raceTime.get(order[0]?.rider.id ?? '') ?? 0;
     const leaderProg = order[0]?.progress ?? 0;
-    this.orderText.setText(order.map((s, i) => {
+    order.forEach((s, i) => {
       const r = s.rider;
       const near = Math.abs(i - playerIdx) === 1;
       const tag = r.isPlayer ? '>' : near ? '·' : ' ';
@@ -426,16 +540,19 @@ export class RaceScene extends Phaser.Scene {
       const gapStr = s.crashed ? 'OUT'
         : i === 0 ? 'LEAD'
         : lapsDown >= 1 ? `+${lapsDown} LAP`
-        : `+${((this.raceTime.get(r.id) ?? 0) - leaderTime).toFixed(1)}`;
+        : `+${Math.max(0, (this.raceTime.get(r.id) ?? 0) - leaderTime).toFixed(1)}`;
       const lt = this.lastLap.get(r.id);
       const ltStr = s.crashed || !lt ? '—' : formatLapTime(lt);
-      return `${tag}${String(i + 1).padStart(2)} #${String(this.numbers.get(r.id)).padStart(2)} ${r.name.slice(0, 9).padEnd(9)} ${gapStr.padStart(6)} ${ltStr.padStart(8)}`;
-    }).join('\n'));
+      const arrow = this.posArrows.get(r.id) ?? ' ';
+      const row = this.rowTexts[i];
+      row.setText(`${tag}${String(i + 1).padStart(2)}${arrow} #${String(this.numbers.get(r.id)).padStart(2)} ${ellipsize(r.name, 12).padEnd(12)} ${gapStr.padStart(7)} ${ltStr.padStart(8)}`);
+      row.setColor(s.crashed ? '#8b93a7' : r.isPlayer ? '#f5c518' : arrow === '▲' ? '#a5ffc8' : arrow === '▼' ? '#ffb3c0' : '#e0e0e0');
+    });
 
     // Fastest-lap banner.
     if (this.fastest) {
       const fr = states.find((s) => s.rider.id === this.fastest!.id)!.rider;
-      this.flText.setText(`⚡ FL  #${this.numbers.get(fr.id)} ${fr.name.slice(0, 12)}  ${formatLapTime(this.fastest.time)}`);
+      this.flText.setText(`⚡ FL  #${this.numbers.get(fr.id)} ${ellipsize(fr.name, 12)}  ${formatLapTime(this.fastest.time)}`);
     }
 
     // Mark and name whoever the player is battling (the rider directly ahead).
@@ -446,12 +563,15 @@ export class RaceScene extends Phaser.Scene {
      } else if (playerIdx > 0) {
       const ahead = order[playerIdx - 1];
       const pos = screen.get(ahead.rider.id)!;
-      this.chaseRing.setPosition(pos.x, pos.y).setVisible(true);
-      const gapS = (this.raceTime.get(me.rider.id) ?? 0) - (this.raceTime.get(ahead.rider.id) ?? 0);
-      this.calloutText.setText(`P${playerIdx + 1} — chasing #${this.numbers.get(ahead.rider.id)} ${ahead.rider.name} (+${gapS.toFixed(1)}s)`);
+      const gapS = Math.max(0, (this.raceTime.get(me.rider.id) ?? 0) - (this.raceTime.get(ahead.rider.id) ?? 0));
+      const inBattle = gapS < 1.0;
+      this.chaseRing.setPosition(pos.x, pos.y).setVisible(true).setStrokeStyle(2, inBattle ? 0xffb74d : 0x00e5ff);
+      this.calloutText
+        .setText(`${inBattle ? '» BATTLE!  ' : ''}P${playerIdx + 1} — chasing #${this.numbers.get(ahead.rider.id)} ${ellipsize(ahead.rider.name, 18)} (+${gapS.toFixed(1)}s)`)
+        .setColor(inBattle ? '#ffb74d' : '#00e5ff');
     } else {
       this.chaseRing.setVisible(false);
-      this.calloutText.setText('You are leading the race!');
+      this.calloutText.setText('You are leading the race!').setColor('#00e5ff');
     }
 
     // Keep the "YOU" label pinned just above the player's dot.
@@ -474,10 +594,17 @@ export class RaceScene extends Phaser.Scene {
   update(_t: number, delta: number): void {
     if (this.done) return;
     this.updateCommentary(delta);
+    this.updateRain(delta);
     const lapMs = (RACE_ANIM_SECONDS * 1000) / RACE_LAPS;
     this.acc += delta * this.speed;
     while (this.acc >= lapMs && this.lapsDone < RACE_LAPS) { this.advanceOneLap(); this.acc -= lapMs; }
-    if (this.lapsDone >= RACE_LAPS && this.acc >= lapMs) { this.renderFrame(1); this.done = true; this.soundEngine.stopEngine(); this.time.delayedCall(900, () => this.finish()); return; }
+    if (this.lapsDone >= RACE_LAPS && this.acc >= lapMs) {
+      this.renderFrame(1); this.done = true; this.soundEngine.stopEngine();
+      this.soundEngine.playCheckeredFlag();
+      this.showFinishFlourish();
+      this.time.delayedCall(1600, () => this.finish());
+      return;
+    }
     this.renderFrame(Math.min(1, this.acc / lapMs));
     this.soundEngine.playEngine(this.speed);
    }
@@ -486,11 +613,11 @@ export class RaceScene extends Phaser.Scene {
     if (this.done) return;
     while (this.lapsDone < RACE_LAPS) this.advanceOneLap();
     this.done = true;
+    this.soundEngine.playCheckeredFlag();
     this.finish();
   }
 
   private finish(): void {
-    this.soundEngine.playCheckeredFlag();
     const run = this.sd.run;
     const result = finalizeRace(run, run.rng);
     const summaries = applyProgression([this.sd.season.playerRider, ...this.sd.season.aiRiders], result);

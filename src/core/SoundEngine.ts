@@ -3,20 +3,20 @@ const MUTE_KEY = 'moto-gt-muted';
 export class SoundEngine {
   private ctx!: AudioContext;
   private muted = false;
-  private engineNode: { source: AudioScheduledSourceNode | null; gain: GainNode } = { source: null, gain: null as unknown as GainNode };
+  private engineGain!: GainNode;            // persistent master gain for the engine hum (fades, never clicks)
+  private engineOsc: OscillatorNode | null = null;
 
   constructor() {
     this.muted = typeof localStorage !== 'undefined' && localStorage.getItem(MUTE_KEY) === 'true';
     this.ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    this.engineNode.gain = this.ctx.createGain();
-    this.engineNode.gain.connect(this.ctx.destination);
-    this.engineNode.gain.gain.value = this.muted ? 0 : 0.15;
+    this.engineGain = this.ctx.createGain();
+    this.engineGain.connect(this.ctx.destination);
+    this.engineGain.gain.value = 0;
     }
 
   toggleMute(): void {
     this.muted = !this.muted;
     localStorage.setItem(MUTE_KEY, String(this.muted));
-    this.engineNode.gain.gain.value = this.muted ? 0 : 0.15;
     if (this.muted) this.stopEngine();
   }
 
@@ -24,23 +24,42 @@ export class SoundEngine {
 
   private resume(): void { if (this.ctx.state === 'suspended') this.ctx.resume(); }
 
-  playEngine(speed: number): void {
+  // Engine hum: one persistent oscillator through a lowpass filter (tames the raw sawtooth's
+  // harsh upper harmonics), started once per race and re-pitched smoothly as speed changes.
+  // Previously this was called every animation frame and restarted the oscillator each time —
+  // stopping and starting with no fade produced a click roughly 60 times a second.
+  private startEngine(speed: number): void {
     this.resume();
-    this.stopEngine();
+    if (this.muted || this.engineOsc) return;
     const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
     osc.type = 'sawtooth';
     osc.frequency.value = 55 + speed * 25;
-    osc.connect(gain); gain.connect(this.engineNode.gain);
+    filter.type = 'lowpass';
+    filter.frequency.value = 900;
+    filter.Q.value = 0.6;
+    osc.connect(filter); filter.connect(this.engineGain);
     osc.start();
-    this.engineNode.source = osc;
+    this.engineGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.engineGain.gain.setValueAtTime(this.engineGain.gain.value, this.ctx.currentTime);
+    this.engineGain.gain.linearRampToValueAtTime(0.12, this.ctx.currentTime + 0.15); // fade in
+    this.engineOsc = osc;
+  }
+
+  playEngine(speed: number): void {
+    if (this.muted) return;
+    if (!this.engineOsc) { this.startEngine(speed); return; }
+    this.engineOsc.frequency.setTargetAtTime(55 + speed * 25, this.ctx.currentTime, 0.08); // smooth re-pitch, no click
   }
 
   stopEngine(): void {
-    if (this.engineNode.source) {
-      try { this.engineNode.source.stop(); } catch { /* already stopped */ }
-      this.engineNode.source = null;
-    }
+    if (!this.engineOsc) return;
+    const osc = this.engineOsc;
+    this.engineOsc = null;
+    this.engineGain.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.engineGain.gain.setValueAtTime(this.engineGain.gain.value, this.ctx.currentTime);
+    this.engineGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.1); // fade out
+    try { osc.stop(this.ctx.currentTime + 0.15); } catch { /* already stopped */ }
   }
 
   playCrash(): void {

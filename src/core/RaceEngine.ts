@@ -1,8 +1,9 @@
-import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot, Weather } from './types';
-import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION, GRID_SPACING } from './constants';
+import type { SeasonState, Setup, Risk, Rider, Track, RaceResult, RaceEntry, RaceTimeline, LapSnapshot, Weather, TireCompound } from './types';
+import { POINTS_TABLE, PUSH_BONUS, RACE_LAPS, LAP_NOISE_STD, MOMENTUM_WEIGHT, DRAFT_RANGE, DRAFT_BONUS, FIELD_COMPRESSION, GRID_SPACING, TIRE_PACE_SCALE } from './constants';
 import { baseAxes, applySetup, weightedBase, type Axes } from './PerformanceModel';
 import { crashProbability } from './CrashModel';
-import { aiSetup, aiRisk } from './AIDecision';
+import { aiSetup, aiRisk, aiCompound } from './AIDecision';
+import { calcTireWear, getTireGrip, getTireCrashRisk } from './TireModel';
 import type { RNG } from './RNG';
 
 export interface RiderState {
@@ -10,6 +11,8 @@ export interface RiderState {
   basePace: number; axes: Axes;            // basePace excludes push (push is applied per lap by risk)
   progress: number; crashed: boolean; crashLap: number;
   lastNoise: number;                       // AR(1) state: last lap's applied noise (0 before lap 1)
+  compound: TireCompound;                  // tire compound for the race
+  tireWear: number;                        // cumulative wear 0..100, updated each lap
 }
 
 export interface RaceRun {
@@ -46,6 +49,7 @@ export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG, gr
   const states: RiderState[] = field.map((rider) => {
     const setup = rider.isPlayer ? playerSetup : aiSetup(rider, track, rng);
     const risk = rider.isPlayer ? 'medium' : aiRisk(rider, rng);
+    const compound = rider.isPlayer ? (season.lastCompound ?? 'medium') : aiCompound(rider, rng);
     const axes = applySetup(baseAxes(rider.skills, rider.bike), setup, weather);
     let progress = 0;
     if (grid) {
@@ -54,7 +58,7 @@ export function createRace(season: SeasonState, playerSetup: Setup, rng: RNG, gr
         progress = (fieldSize - gridPos) * GRID_SPACING;
        }
       }
-    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress, crashed: false, crashLap: 0, lastNoise: 0 };
+    return { rider, setup, aiRisk: risk, lastRisk: risk, basePace: weightedBase(axes, track), axes, progress, crashed: false, crashLap: 0, lastNoise: 0, compound, tireWear: 0 };
     });
   const meanPace = states.reduce((a, s) => a + s.basePace, 0) / states.length || 7;
   return { raceIndex: season.currentRaceIndex, track, states, lap: 0, meanPace, rng, weather };
@@ -81,11 +85,17 @@ export function stepLap(run: RaceRun, playerRisk: Risk): void {
     const risk = s.rider.isPlayer ? playerRisk : s.aiRisk;
     s.lastRisk = risk;
     s.lastNoise = momentumNoise(s.lastNoise, run.rng.gaussian(0, LAP_NOISE_STD));
+    // Tires: wear accrues each lap; the grip delta enters the pace deviation like a
+    // push bonus (fresh soft ≈ +0.6, dead soft ≈ -1.0), so compound choice shapes the race.
+    s.tireWear = calcTireWear(run.lap, s.compound, s.rider.skills.consistency);
+    const tirePace = TIRE_PACE_SCALE * (getTireGrip(s.tireWear, s.compound) - 1);
     // Order-preserving compression toward the field mean: keeps the pack close without
     // changing who finishes where (FIELD_COMPRESSION = 1 reproduces the raw spread).
-    const dev = (s.basePace - run.meanPace) + PUSH_BONUS[risk] + s.lastNoise;
+    const dev = (s.basePace - run.meanPace) + PUSH_BONUS[risk] + tirePace + s.lastNoise;
     s.progress += run.meanPace + FIELD_COMPRESSION * dev;
-    if (run.rng.nextFloat() < perLapCrashProb(risk, s.rider.skills.consistency, run.track, run.weather)) {
+    // Worn tires multiply crash risk (no effect below 50% wear, up to ~2x near 100%).
+    const crashP = Math.min(0.95, perLapCrashProb(risk, s.rider.skills.consistency, run.track, run.weather) * getTireCrashRisk(s.tireWear));
+    if (run.rng.nextFloat() < crashP) {
       s.crashed = true;
       s.crashLap = run.lap;
     }

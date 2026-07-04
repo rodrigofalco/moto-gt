@@ -108,7 +108,7 @@ export interface TireParams {
 }
 
 // Commentary
-export type CommentaryType = 'overtake' | 'crash' | 'lead_change' | 'fastest_lap' | 'gap' | 'start' | 'finish' | 'battle';
+export type CommentaryType = 'overtake' | 'crash' | 'lead_change' | 'fastest_lap' | 'gap' | 'start' | 'finish' | 'battle' | 'tire';
 
 export interface CommentaryEvent {
   lap: number;
@@ -126,6 +126,7 @@ export interface RaceSnapshot {
   tireWear: Map<string, number>;
   overtookBy: Map<string, string>;
   overtakeBy: Map<string, string>;
+  gapAheadSec: Map<string, number>;   // race-fiction seconds to the rider directly ahead
 }
 
 // Career continuation

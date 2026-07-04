@@ -142,9 +142,37 @@ export function generateCommentary(prev: RaceSnapshot, cur: RaceSnapshot): Comme
     });
   }
 
-  // Tire warnings for player
+  // Battles: fire once when a gap closes under the threshold (crossing, not while inside).
+  const BATTLE_GAP = 1.0;
+  const riderAt = (s: RaceSnapshot, pos: number): string | undefined => {
+    for (const [rid, p] of s.positions.entries()) if (p === pos) return rid;
+    return undefined;
+  };
+  const battleStarted = (rid: string): boolean => {
+    const prevGap = prev.gapAheadSec.get(rid);
+    const curGap = cur.gapAheadSec.get(rid);
+    return prevGap !== undefined && curGap !== undefined && prevGap >= BATTLE_GAP && curGap < BATTLE_GAP;
+  };
+  const emitted = new Set<string>();
+  const emitBattle = (chaserId: string): void => {
+    const pos = cur.positions.get(chaserId);
+    if (!pos || pos <= 1 || cur.crashed.has(chaserId)) return;
+    const targetId = riderAt(cur, pos - 1);
+    if (!targetId || cur.crashed.has(targetId) || emitted.has(chaserId)) return;
+    emitted.add(chaserId);
+    const a = cur.riders.find((r) => r.id === chaserId)?.name ?? 'Rider';
+    const b = cur.riders.find((r) => r.id === targetId)?.name ?? 'rival';
+    const gap = (cur.gapAheadSec.get(chaserId) ?? 0).toFixed(1);
+    events.push({ lap: cur.lap, text: fill(pick(PHRASES.battle), { a, b, gap }), type: 'battle' });
+  };
+  if (battleStarted(player)) emitBattle(player);
+  const p2 = riderAt(cur, 2);
+  if (p2 && p2 !== player && battleStarted(p2)) emitBattle(p2); // battle for the lead
+
+  // Tire warning for the player: once, when wear crosses 70%.
   const tireWear = cur.tireWear.get(player);
-  if (tireWear !== undefined && tireWear > 70) {
+  const prevWear = prev.tireWear.get(player) ?? 0;
+  if (tireWear !== undefined && tireWear > 70 && prevWear <= 70) {
     const rider = cur.riders.find((r) => r.id === player);
     events.push({
       lap: cur.lap,
@@ -152,7 +180,7 @@ export function generateCommentary(prev: RaceSnapshot, cur: RaceSnapshot): Comme
         a: rider?.name ?? 'You',
         wear: String(Math.round(tireWear)),
       }),
-      type: 'battle',
+      type: 'tire',
     });
   }
 

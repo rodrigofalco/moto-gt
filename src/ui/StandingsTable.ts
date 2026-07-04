@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { THEME } from './theme';
+import { fitText } from './text';
 import type { Rider } from '../core/types';
 
 const ROW_H = 22;
@@ -47,10 +48,12 @@ export function renderStandings(
     }));
     tcx += COL_W[0];
 
-    container.add(scene.add.text(tcx + 8, ry + 3, r.name, {
+    const nameText = scene.add.text(tcx + 8, ry + 3, r.name, {
       fontFamily: THEME.fontFamily, fontSize: '13px', color: isPlayer ? THEME.gold : THEME.text,
       fontStyle: isPlayer ? 'bold' : 'normal',
-    }));
+    });
+    fitText(nameText, COL_W[1] - 12); // keep long names out of the Pts column
+    container.add(nameText);
     tcx += COL_W[1];
 
     container.add(scene.add.text(tcx + 8, ry + 3, String(r.points), {

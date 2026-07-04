@@ -6,6 +6,7 @@ import { getStandings, getChampion } from '../core/Championship';
 import { resultHeadline } from '../core/Advice';
 import { BRAND_COLORS } from '../core/constants';
 import { SoundEngine } from '../core/SoundEngine';
+import { ellipsize } from '../ui/text';
 import { runOffSeason } from '../core/OffSeason';
 import { RNG } from '../core/RNG';
 import type { SeasonState, RaceResult, Rider, CareerState } from '../core/types';
@@ -59,7 +60,7 @@ export class RaceResultScene extends Phaser.Scene {
       }
       const tag = isPlayer ? '>' : ' ';
       const crash = e.crashed ? ' DNF' : '    ';
-      const line = `${tag}${String(e.position).padStart(2)}. ${e.rider.name.padEnd(16)} ${SETUP_SHORT[e.setup]}/${RISK_SHORT[e.risk]} ${String(e.pointsAwarded).padStart(3)}${crash}`;
+      const line = `${tag}${String(e.position).padStart(2)}. ${ellipsize(e.rider.name, 16).padEnd(16)} ${SETUP_SHORT[e.setup]}/${RISK_SHORT[e.risk]} ${String(e.pointsAwarded).padStart(3)}${crash}`;
       this.add.text(70, y, line, { fontFamily: 'monospace', fontSize: '14px', color: isPlayer ? THEME.gold : THEME.text, fontStyle: isPlayer ? 'bold' : 'normal' });
     });
 
@@ -71,7 +72,7 @@ export class RaceResultScene extends Phaser.Scene {
     this.add.text(688, 40, 'Standings', { fontFamily: THEME.fontFamily, fontSize: '18px', color: THEME.gold, fontStyle: 'bold' });
     this.renderStandingsWithArrows(688, 68);
 
-    new Button(this, { x: 512, y: 680, width: 280, height: 56, label: 'NEXT RACE', onClick: () => {
+    new Button(this, { x: 512, y: 470, width: 280, height: 56, label: 'NEXT RACE', onClick: () => {
       if (this.career) this.scene.start('SeasonScene', { season: this.season, career: this.career });
       else this.scene.start('SeasonScene', { season: this.season });
      } });
@@ -101,7 +102,7 @@ export class RaceResultScene extends Phaser.Scene {
       const arrow = !hasPrev ? ' ' : cur < was ? '▲' : cur > was ? '▼' : '—';
       const tag = r.isPlayer ? '>' : ' ';
       const gap = i === 0 ? '' : `+${leaderPoints - r.points}`;
-      return `${tag}${String(cur).padStart(2)} ${arrow} ${r.name.slice(0, 16).padEnd(16)} ${String(r.points).padStart(3)}  ${gap.padStart(4)}`;
+      return `${tag}${String(cur).padStart(2)} ${arrow} ${ellipsize(r.name, 16).padEnd(16)} ${String(r.points).padStart(3)}  ${gap.padStart(4)}`;
     });
     this.add.text(x, y, lines.join('\n'), { fontFamily: 'monospace', fontSize: '14px', color: '#e0e0e0' });
   }
@@ -156,9 +157,10 @@ export class RaceResultScene extends Phaser.Scene {
       const top = baseY - b.h;
       const block = this.add.rectangle(b.x, baseY - b.h / 2, w, b.h, b.color).setStrokeStyle(2, 0x1a1a2e);
       this.add.text(b.x, baseY - b.h / 2, String(b.place), { fontFamily: THEME.fontFamily, fontSize: '26px', color: '#0b0b14', fontStyle: 'bold' }).setOrigin(0.5);
-      this.add.circle(b.x - 52, top - 30, 6, BRAND_COLORS[b.rider.brandId] ?? 0x4fc3f7);
       const you = b.rider.isPlayer ? ' (YOU)' : '';
-      this.add.text(b.x, top - 30, `${b.rider.name}${you}`, { fontFamily: THEME.fontFamily, fontSize: '13px', color: b.rider.isPlayer ? '#f5c518' : '#e0e0e0' }).setOrigin(0.5);
+      const nameText = this.add.text(b.x, top - 30, `${b.rider.name}${you}`, { fontFamily: THEME.fontFamily, fontSize: '13px', color: b.rider.isPlayer ? '#f5c518' : '#e0e0e0' }).setOrigin(0.5);
+      // Brand dot sits just left of the name, clear of the first letter.
+      this.add.circle(b.x - nameText.width / 2 - 10, top - 30, 6, BRAND_COLORS[b.rider.brandId] ?? 0x4fc3f7);
       this.add.text(b.x, top - 14, `${b.rider.points} pts`, { fontFamily: THEME.fontFamily, fontSize: '12px', color: '#94a3b8' }).setOrigin(0.5);
       this.tweens.add({ targets: block, scaleY: 1.06, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }

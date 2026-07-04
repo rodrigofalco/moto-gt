@@ -3,20 +3,19 @@ import type { TireCompound } from './types';
 import { TIRE_COMPOUNDS, TIRE_WEAR_PER_LAP_BASE } from './constants';
 
 // Calculate cumulative tire wear after a lap.
-// Higher durability = slower wear. Consistent riders wear tires slightly less.
+// Higher durability = slower wear. Consistent riders wear tires up to ~20% slower.
 export function calcTireWear(lap: number, compound: TireCompound, consistency: number): number {
   const compoundData = TIRE_COMPOUNDS[compound];
-  const wearPerLap = TIRE_WEAR_PER_LAP_BASE / compoundData.durability;
-  const consistencyBonus = (consistency - 5) * 0.03; // +/- up to 0.3
-  return Math.min(100, lap * (wearPerLap - consistencyBonus));
+  const wearPerLap = (TIRE_WEAR_PER_LAP_BASE / compoundData.durability) * (1 - (consistency - 5) * 0.04);
+  return Math.min(100, lap * wearPerLap);
 }
 
 // Effective grip multiplier based on wear and compound.
 // Fresh soft > fresh medium > fresh hard, but worn hard can beat fresh soft.
 export function getTireGrip(wear: number, compound: TireCompound): number {
   const compoundData = TIRE_COMPOUNDS[compound];
-  // Grip degrades linearly with wear, faster at high wear
-  const wearFactor = 1 - (wear / 100) * (0.3 + (wear > 70 ? 0.4 : 0));
+  // Grip degrades linearly with wear, with an extra cliff above 70% wear.
+  const wearFactor = 1 - (wear / 100) * (0.3 + (wear > 70 ? 0.15 : 0));
   return compoundData.grip * wearFactor;
 }
 
